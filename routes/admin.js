@@ -1,9 +1,12 @@
 'use strict';
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
-const { all, get, run, tx, hashPassword, verifyPassword } = require('../db');
+const { DATA_DIR, all, get, run, tx, hashPassword, verifyPassword, getSettings, saveSettings } = require('../db');
 const U = require('../lib/util');
 const B = require('../lib/booking');
+const mail = require('../lib/mailer');
 
 const router = express.Router();
 const SESSION_MS = 12 * 60 * 60 * 1000;
@@ -59,7 +62,9 @@ router.get('/stats', (req, res) => {
     const total = n('SELECT COALESCE(SUM(total_rooms),0) AS n FROM room_types WHERE branch_id = ? AND active = 1', b.id);
     const booked = n(`SELECT COALESCE(SUM(rooms),0) AS n FROM bookings WHERE branch_id = ?
       AND status IN ('confirmed','checked_in') AND check_in <= ? AND check_out > ?`, b.id, t, t);
-    return { ...b, total, booked };
+    const offline = n(`SELECT COALESCE(SUM(k.rooms),0) AS n FROM room_blocks k JOIN room_types r ON r.id = k.room_type_id
+      WHERE r.branch_id = ? AND r.active = 1 AND k.date = ?`, b.id, t);
+    return { ...b, total, booked: Math.min(total, booked + offline) };
   });
   res.json({
     today: t,
@@ -99,7 +104,16 @@ function listQuery(table, dateCol, q) {
 router.get('/bookings', (req, res) => res.json(listQuery('bookings', 'check_in', req.query)));
 router.get('/reservations', (req, res) => res.json(listQuery('reservations', 'date', req.query)));
 
-router.patch('/bookings/:id', (req, res) => {
+// Guests get an email when staff confirm or cancel.
+async function emailOnStatusChange(prev, row, isRoom) {
+  if (prev === row.status || !['confirmed', 'cancelled'].includes(row.status)) return null;
+  if (!row.email) return { ok: false, error: 'No guest email on this booking' };
+  return mail.notifyGuest(row.status, row, isRoom);
+}
+// Express 4 does not catch rejected promises, so pass them on to the error handler.
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+router.patch('/bookings/:id', wrap(async (req, res) => {
   const bk = get('SELECT * FROM bookings WHERE id = ?', Number(req.params.id));
   if (!bk) throw new U.HttpError(404, 'Booking not found');
   const status = req.body.status != null ? U.oneOf(req.body.status, B.BOOKING_STATUSES, 'status') : bk.status;
@@ -114,17 +128,34 @@ router.patch('/bookings/:id', (req, res) => {
     }
     run("UPDATE bookings SET status = ?, admin_note = ?, updated_at = datetime('now') WHERE id = ?", status, note, bk.id);
   });
-  res.json(get('SELECT * FROM bookings WHERE id = ?', bk.id));
-});
+  const updated = get('SELECT * FROM bookings WHERE id = ?', bk.id);
+  res.json({ ...updated, email_result: await emailOnStatusChange(bk.status, updated, true) });
+}));
 
-router.patch('/reservations/:id', (req, res) => {
+router.patch('/reservations/:id', wrap(async (req, res) => {
   const r = get('SELECT * FROM reservations WHERE id = ?', Number(req.params.id));
   if (!r) throw new U.HttpError(404, 'Reservation not found');
   const status = req.body.status != null ? U.oneOf(req.body.status, B.RESERVATION_STATUSES, 'status') : r.status;
   const note = req.body.admin_note != null ? U.str(req.body.admin_note, { field: 'Note', max: 1000 }) : r.admin_note;
   run("UPDATE reservations SET status = ?, admin_note = ?, updated_at = datetime('now') WHERE id = ?", status, note, r.id);
-  res.json(get('SELECT * FROM reservations WHERE id = ?', r.id));
+  const updated = get('SELECT * FROM reservations WHERE id = ?', r.id);
+  res.json({ ...updated, email_result: await emailOnStatusChange(r.status, updated, false) });
+}));
+
+// Email history for one booking / reservation, and manual (re)send.
+router.get('/emails', (req, res) => {
+  res.json(all('SELECT * FROM email_log WHERE ref = ? ORDER BY id DESC LIMIT 50', String(req.query.ref || '')));
 });
+router.post('/:table(bookings|reservations)/:id/email', wrap(async (req, res) => {
+  const isRoom = req.params.table === 'bookings';
+  const row = get(`SELECT * FROM ${isRoom ? 'bookings' : 'reservations'} WHERE id = ?`, Number(req.params.id));
+  if (!row) throw new U.HttpError(404, 'Not found');
+  const kind = U.oneOf(req.body?.kind, ['received', 'confirmed', 'cancelled'], 'email type');
+  if (!row.email) throw U.bad('This guest did not give an email address');
+  const r = await mail.notifyGuest(kind, row, isRoom);
+  if (!r.ok) throw U.bad('Email could not be sent: ' + r.error);
+  res.json({ ok: true });
+}));
 
 function toCsv(rows, cols) {
   const esc = (v) => {
@@ -160,9 +191,16 @@ router.delete('/messages/:id', (req, res) => {
 });
 
 // ---------------- Rooms ----------------
+function photoList(v) {
+  const list = (Array.isArray(v) ? v : []).map((x) => U.str(x, { field: 'Photo URL', max: 500 })).filter(Boolean);
+  if (list.length > 12) throw U.bad('Up to 12 photos per room type');
+  return list;
+}
 function roomInput(body) {
   const b = B.getBranch(body.branch_id);
   if (!b.has_lodging) throw U.bad('This branch does not offer rooms');
+  // First photo is the cover (image_url); the rest are stored in photos.
+  const photos = body.photos !== undefined ? photoList(body.photos) : [U.str(body.image_url, { field: 'Image URL', max: 500 })].filter(Boolean);
   return [
     b.id,
     U.str(body.name, { field: 'Room name', max: 80, required: true }),
@@ -172,9 +210,10 @@ function roomInput(body) {
     U.int(body.price, { field: 'Price per night', min: 0, max: 1000000 }),
     U.int(body.total_rooms, { field: 'Number of rooms', min: 0, max: 500 }),
     U.str(body.amenities, { field: 'Amenities', max: 400 }),
-    U.str(body.image_url, { field: 'Image URL', max: 500 }),
+    photos[0] || '',
     body.active === false || body.active === 0 ? 0 : 1,
     U.int(body.sort_order ?? 0, { field: 'Order', min: 0, max: 999 }),
+    JSON.stringify(photos.slice(1)),
   ];
 }
 router.get('/rooms', (req, res) => {
@@ -182,15 +221,15 @@ router.get('/rooms', (req, res) => {
     ORDER BY b.sort_order, r.sort_order, r.price`));
 });
 router.post('/rooms', (req, res) => {
-  const r = run(`INSERT INTO room_types (branch_id, name, description, capacity, beds, price, total_rooms, amenities, image_url, active, sort_order)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`, ...roomInput(req.body || {}));
+  const r = run(`INSERT INTO room_types (branch_id, name, description, capacity, beds, price, total_rooms, amenities, image_url, active, sort_order, photos)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, ...roomInput(req.body || {}));
   res.status(201).json(get('SELECT * FROM room_types WHERE id = ?', Number(r.lastInsertRowid)));
 });
 router.put('/rooms/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!get('SELECT id FROM room_types WHERE id = ?', id)) throw new U.HttpError(404, 'Room type not found');
   run(`UPDATE room_types SET branch_id=?, name=?, description=?, capacity=?, beds=?, price=?, total_rooms=?, amenities=?,
-    image_url=?, active=?, sort_order=? WHERE id = ?`, ...roomInput(req.body || {}), id);
+    image_url=?, active=?, sort_order=?, photos=? WHERE id = ?`, ...roomInput(req.body || {}), id);
   res.json(get('SELECT * FROM room_types WHERE id = ?', id));
 });
 router.delete('/rooms/:id', (req, res) => {
@@ -265,5 +304,147 @@ router.put('/branches/:id', (req, res) => {
   b.id);
   res.json(get('SELECT * FROM branches WHERE id = ?', b.id));
 });
+
+// ---------------- Room availability (mark rooms booked / available) ----------------
+router.get('/availability', (req, res) => {
+  const branch = B.getBranch(req.query.branch);
+  const from = U.isDate(req.query.from) ? req.query.from : U.today();
+  const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 62);
+  const dates = Array.from({ length: days }, (_, i) => U.addDays(from, i));
+  const notes = all(`SELECT k.* FROM room_blocks k JOIN room_types r ON r.id = k.room_type_id
+    WHERE r.branch_id = ? AND k.date >= ? AND k.date <= ?`, branch.id, dates[0], dates[days - 1]);
+  const noteOf = (id, d) => notes.find((k) => k.room_type_id === id && k.date === d)?.note || '';
+  const rooms = all('SELECT * FROM room_types WHERE branch_id = ? ORDER BY active DESC, sort_order, price', branch.id).map((rt) => ({
+    id: rt.id, name: rt.name, total_rooms: rt.total_rooms, active: rt.active,
+    days: dates.map((d) => {
+      const u = B.nightUsage(rt.id, d);
+      return { date: d, ...u, free: Math.max(0, rt.total_rooms - u.booked - u.blocked), note: noteOf(rt.id, d) };
+    }),
+  }));
+  res.json({ branch_id: branch.id, dates, rooms });
+});
+
+// Set how many rooms are booked offline / unavailable on each night from `from` to `to` (inclusive).
+router.put('/availability', (req, res) => {
+  const x = req.body || {};
+  const rt = get('SELECT * FROM room_types WHERE id = ?', Number(x.room_type_id) || 0);
+  if (!rt) throw U.bad('Please choose a room type');
+  if (!U.isDate(x.from)) throw U.bad('Please choose a start date');
+  const to = U.isDate(x.to) ? x.to : x.from;
+  if (to < x.from) throw U.bad('End date must be on or after the start date');
+  if (U.diffDays(x.from, to) > 365) throw U.bad('Please choose a range of one year or less');
+  const mode = U.oneOf(x.mode || 'set', ['set', 'sold_out', 'available'], 'mode');
+  const note = U.str(x.note, { field: 'Note', max: 200 });
+  const count = mode === 'set' ? U.int(x.rooms, { field: 'Rooms', min: 0, max: rt.total_rooms }) : 0;
+  const skipped = [];
+  tx(() => {
+    for (let d = x.from; d <= to; d = U.addDays(d, 1)) {
+      const { booked } = B.nightUsage(rt.id, d);
+      const free = Math.max(0, rt.total_rooms - booked); // rooms not taken by online bookings
+      let n = mode === 'sold_out' ? free : count;
+      if (n > free) { skipped.push(d); n = free; }
+      if (n > 0) {
+        run(`INSERT INTO room_blocks (room_type_id, date, rooms, note) VALUES (?,?,?,?)
+          ON CONFLICT(room_type_id, date) DO UPDATE SET rooms = excluded.rooms, note = excluded.note`, rt.id, d, n, note);
+      } else {
+        run('DELETE FROM room_blocks WHERE room_type_id = ? AND date = ?', rt.id, d);
+      }
+    }
+  });
+  res.json({ ok: true, skipped });
+});
+
+// ---------------- Photo uploads ----------------
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+function imageExt(buf) {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if (buf.toString('ascii', 0, 4) === 'GIF8') return 'gif';
+  return null;
+}
+router.post('/upload', express.raw({ type: () => true, limit: '10mb' }), (req, res) => {
+  const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  const ext = imageExt(buf);
+  if (!ext) throw U.bad('Please upload a JPG, PNG, WEBP or GIF image');
+  const name = `${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
+  res.status(201).json({ url: `/uploads/${name}` });
+});
+
+// ---------------- Offers ----------------
+function offerInput(body) {
+  const valid_until = U.str(body.valid_until, { field: 'Valid until', max: 10 });
+  if (valid_until && !U.isDate(valid_until)) throw U.bad('Please choose a valid end date');
+  return [
+    body.branch_id ? B.getBranch(body.branch_id).id : null,
+    U.str(body.title, { field: 'Title', max: 120, required: true }),
+    U.str(body.description, { field: 'Description', max: 800 }),
+    U.str(body.badge, { field: 'Badge', max: 30 }),
+    U.str(body.image_url, { field: 'Image', max: 500 }),
+    valid_until,
+    body.active === false || body.active === 0 ? 0 : 1,
+    U.int(body.sort_order ?? 0, { field: 'Order', min: 0, max: 999 }),
+  ];
+}
+router.get('/offers', (req, res) => {
+  res.json(all(`SELECT o.*, b.location AS branch_location FROM offers o LEFT JOIN branches b ON b.id = o.branch_id
+    ORDER BY o.active DESC, o.sort_order, o.id DESC`));
+});
+router.post('/offers', (req, res) => {
+  const r = run(`INSERT INTO offers (branch_id, title, description, badge, image_url, valid_until, active, sort_order)
+    VALUES (?,?,?,?,?,?,?,?)`, ...offerInput(req.body || {}));
+  res.status(201).json(get('SELECT * FROM offers WHERE id = ?', Number(r.lastInsertRowid)));
+});
+router.put('/offers/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!get('SELECT id FROM offers WHERE id = ?', id)) throw new U.HttpError(404, 'Offer not found');
+  run(`UPDATE offers SET branch_id=?, title=?, description=?, badge=?, image_url=?, valid_until=?, active=?, sort_order=?
+    WHERE id = ?`, ...offerInput(req.body || {}), id);
+  res.json(get('SELECT * FROM offers WHERE id = ?', id));
+});
+router.delete('/offers/:id', (req, res) => {
+  run('DELETE FROM offers WHERE id = ?', Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// ---------------- Website content & email settings ----------------
+const SETTING_FIELDS = {
+  announcement: 200, hero_title: 120, hero_highlight: 120, hero_text: 400, hero_image: 500, about_text: 1000,
+  smtp_host: 120, smtp_port: 5, smtp_user: 120, mail_from: 120, mail_from_name: 80, notify_email: 300, site_url: 200,
+};
+router.get('/settings', (req, res) => {
+  const s = getSettings();
+  const out = Object.fromEntries(Object.keys(SETTING_FIELDS).map((k) => [k, s[k] || '']));
+  res.json({ ...out, smtp_pass_set: Boolean(s.smtp_pass || process.env.SMTP_PASS), email_ready: mail.isConfigured() });
+});
+router.put('/settings', (req, res) => {
+  const x = req.body || {};
+  const out = {};
+  for (const [k, max] of Object.entries(SETTING_FIELDS)) {
+    if (x[k] !== undefined) out[k] = U.str(x[k], { field: k.replace(/_/g, ' '), max });
+  }
+  if (out.smtp_port && !/^\d{2,5}$/.test(out.smtp_port)) throw U.bad('SMTP port must be a number such as 587 or 465');
+  if (out.mail_from) U.email(out.mail_from);
+  if (out.notify_email) out.notify_email.split(',').forEach((e) => U.email(e.trim()));
+  if (out.site_url && !/^https?:\/\//i.test(out.site_url)) throw U.bad('Website address must start with http:// or https://');
+  // Password is write-only: blank keeps the saved one.
+  if (typeof x.smtp_pass === 'string' && x.smtp_pass) out.smtp_pass = x.smtp_pass.slice(0, 200);
+  saveSettings(out);
+  res.json({ ok: true });
+});
+router.post('/settings/test-email', wrap(async (req, res) => {
+  const to = U.email(req.body?.to);
+  if (!to) throw U.bad('Enter an email address to send the test to');
+  const { html, text } = mail.layout({
+    heading: 'Test email', intro: 'Email is working. Guests will now receive booking emails from this address.',
+    rows: [['Sent at', new Date().toISOString()]], outro: '',
+  });
+  const r = await mail.send({ to, subject: 'Atithi — test email', html, text, kind: 'test' });
+  if (!r.ok) throw U.bad('Could not send: ' + r.error);
+  res.json({ ok: true });
+}));
 
 module.exports = router;

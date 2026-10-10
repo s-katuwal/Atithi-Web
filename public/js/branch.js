@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { $, $$, esc, rs, icon, list, api, logoFor, roomArt, facilityIcon, fmtTime, telHref, waHref } = window.Atithi;
+  const { $, $$, esc, rs, icon, list, api, logoFor, roomArt, facilityIcon, fmtTime, telHref, waHref, offerCards } = window.Atithi;
 
   const id = location.pathname.split('/branches/')[1]?.replace(/\/$/, '') || new URLSearchParams(location.search).get('id') || '';
 
@@ -44,10 +44,16 @@
         ${facilities.length ? `<div class="facility-list mt-2">${facilities.map((f) => `<div>${icon(facilityIcon(f), 20)} ${esc(f)}</div>`).join('')}</div>` : ''}
       </section>
 
+      ${b.offers.length ? `<section class="branch-section" id="offers">
+        <h2 class="block-title">Special offers</h2>
+        <div class="offer-grid">${offerCards(b.offers)}</div>
+      </section>` : ''}
+
       ${b.has_lodging ? `<section class="branch-section" id="rooms">
         <h2 class="block-title">Rooms &amp; rates</h2>
         <div class="room-grid">${b.rooms.map((r, i) => `<article class="card room-card">
-          <div class="room-art">${roomArt(r, i)}<span class="price-tag">${rs(r.price)} <small>/ night</small></span></div>
+          <div class="room-art" data-room="${r.id}">${roomArt(r, i)}<span class="price-tag">${rs(r.price)} <small>/ night</small></span></div>
+          ${r.photos.length > 1 ? `<div class="room-thumbs" data-room="${r.id}">${r.photos.map((p, k) => `<button type="button" class="${k ? '' : 'active'}" data-src="${esc(p)}" aria-label="Photo ${k + 1}"><img src="${esc(p)}" alt="" loading="lazy"></button>`).join('')}</div>` : ''}
           <div class="room-body">
             <h4>${esc(r.name)}</h4>
             <div class="room-meta"><span>${icon('users', 15)} Up to ${r.capacity}</span>${r.beds ? `<span>${icon('bed', 15)} ${esc(r.beds)}</span>` : ''}</div>
@@ -87,6 +93,15 @@
         <iframe class="map-frame" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Map of ${esc(b.name)} ${esc(b.location)}"
           src="https://www.google.com/maps?q=${encodeURIComponent(b.map_query || b.address)}&output=embed"></iframe>
       </section>`;
+
+    // Room photo thumbnails swap the main picture
+    $('#branchMain').addEventListener('click', (e) => {
+      const t = e.target.closest('.room-thumbs button');
+      if (!t) return;
+      const box = t.parentElement;
+      $(`.room-art[data-room="${box.dataset.room}"] img`).src = t.dataset.src;
+      $$('button', box).forEach((x) => x.classList.toggle('active', x === t));
+    });
 
     const drawMenu = (cat) => {
       $('#menuGrid').innerHTML = b.menu.filter((m) => !cat || m.category === cat).map((m) => `

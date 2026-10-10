@@ -1,7 +1,7 @@
 'use strict';
 const path = require('path');
 const express = require('express');
-require('./db'); // creates tables, seeds data and the first admin account
+const { DATA_DIR } = require('./db'); // creates tables, seeds data and the first admin account
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -25,6 +25,8 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Friendly URLs: /branches/laxmipur → branch page
 app.get('/branches/:id', (req, res) => res.sendFile(path.join(PUBLIC, 'branch.html')));
+// Photos uploaded from the admin panel (stored next to the database so they survive redeploys).
+app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads'), { maxAge: '30d', immutable: true, index: false }));
 app.use(express.static(PUBLIC, { extensions: ['html'], maxAge: '1h' }));
 app.use((req, res) => res.status(404).sendFile(path.join(PUBLIC, '404.html')));
 

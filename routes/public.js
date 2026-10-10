@@ -1,14 +1,34 @@
 'use strict';
 const express = require('express');
-const { all, get, run, tx } = require('../db');
+const { all, get, run, tx, getSettings } = require('../db');
 const U = require('../lib/util');
 const B = require('../lib/booking');
+const mail = require('../lib/mailer');
 
 const router = express.Router();
 const submitLimit = U.rateLimit({ max: 15, windowMs: 10 * 60 * 1000 });
 const lookupLimit = U.rateLimit({ max: 30, windowMs: 10 * 60 * 1000 });
 
 const publicBranch = (b) => ({ ...b, time_slots: b.has_dining ? B.timeSlots(b) : [] });
+const withPhotos = (r) => {
+  let photos = [];
+  try { photos = JSON.parse(r.photos || '[]'); } catch { /* ignore */ }
+  return { ...r, photos: [r.image_url, ...photos].filter(Boolean) };
+};
+const OFFERS_SQL = `SELECT o.*, b.name AS branch_name, b.location AS branch_location FROM offers o
+  LEFT JOIN branches b ON b.id = o.branch_id
+  WHERE o.active = 1 AND (o.valid_until = '' OR o.valid_until >= ?)`;
+
+// Website text and images that staff can change in Admin → Website. Never exposes SMTP settings.
+const SITE_KEYS = ['announcement', 'hero_title', 'hero_highlight', 'hero_text', 'hero_image', 'about_text'];
+router.get('/site', (req, res) => {
+  const s = getSettings();
+  res.json(Object.fromEntries(SITE_KEYS.map((k) => [k, s[k] || ''])));
+});
+
+router.get('/offers', (req, res) => {
+  res.json(all(`${OFFERS_SQL} ORDER BY o.sort_order, o.id DESC`, U.today()));
+});
 
 router.get('/branches', (req, res) => {
   const branches = all('SELECT * FROM branches ORDER BY sort_order');
@@ -22,7 +42,8 @@ router.get('/branches/:id', (req, res) => {
   const b = B.getBranch(req.params.id);
   res.json({
     ...publicBranch(b),
-    rooms: all('SELECT * FROM room_types WHERE branch_id = ? AND active = 1 ORDER BY sort_order, price', b.id),
+    rooms: all('SELECT * FROM room_types WHERE branch_id = ? AND active = 1 ORDER BY sort_order, price', b.id).map(withPhotos),
+    offers: all(`${OFFERS_SQL} AND (o.branch_id IS NULL OR o.branch_id = ?) ORDER BY o.sort_order, o.id DESC`, U.today(), b.id),
     menu: all('SELECT * FROM menu_items WHERE branch_id = ? AND active = 1 ORDER BY category, price', b.id),
   });
 });
@@ -38,7 +59,7 @@ router.get('/branches/:id/availability', (req, res) => {
   const { check_in, check_out } = req.query;
   const nights = B.validateStay(check_in, check_out);
   const rooms = all('SELECT * FROM room_types WHERE branch_id = ? AND active = 1 ORDER BY sort_order, price', b.id)
-    .map((rt) => ({ ...rt, available: B.roomsAvailable(rt, check_in, check_out), nights, stay_total: rt.price * nights }));
+    .map((rt) => ({ ...withPhotos(rt), available: B.roomsAvailable(rt, check_in, check_out), nights, stay_total: rt.price * nights }));
   res.json({ branch_id: b.id, check_in, check_out, nights, rooms });
 });
 
@@ -55,6 +76,7 @@ router.post('/bookings', submitLimit, (req, res) => {
   const guest_name = U.str(body.guest_name, { field: 'Full name', max: 100, required: true });
   const phone = U.phone(body.phone);
   const email = U.email(body.email);
+  if (!email) throw U.bad('Please enter your email address so we can send your booking confirmation');
   const special_requests = U.str(body.special_requests, { field: 'Special requests', max: 1000 });
 
   const result = tx(() => {
@@ -78,9 +100,13 @@ router.post('/bookings', submitLimit, (req, res) => {
     return { ref, room_name: rt.name, price_per_night: rt.price, total };
   });
 
+  const saved = get('SELECT * FROM bookings WHERE ref = ?', result.ref);
+  mail.later(mail.notifyGuest('received', saved, true));
+  mail.later(mail.notifyStaff(saved, true));
+
   res.status(201).json({
     ...result, type: 'booking', status: 'pending', branch_name: b.name, branch_location: b.location,
-    branch_phone: b.phone, check_in, check_out, nights, rooms, adults, children, guest_name,
+    branch_phone: b.phone, check_in, check_out, nights, rooms, adults, children, guest_name, email,
   });
 });
 
@@ -110,10 +136,13 @@ router.post('/reservations', submitLimit, (req, res) => {
   const ref = U.makeRef('TB', b.code);
   run(`INSERT INTO reservations (ref, branch_id, name, phone, email, date, time, guests, seating, occasion, notes)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`, ref, b.id, name, phone, email, date, time, guests, seating, occasion, notes);
+  const saved = get('SELECT * FROM reservations WHERE ref = ?', ref);
+  mail.later(mail.notifyGuest('received', saved, false));
+  mail.later(mail.notifyStaff(saved, false));
 
   res.status(201).json({
     ref, type: 'reservation', status: 'pending', branch_name: b.name, branch_location: b.location,
-    branch_phone: b.phone, date, time, guests, seating, occasion, name,
+    branch_phone: b.phone, date, time, guests, seating, occasion, name, email,
   });
 });
 
@@ -144,6 +173,7 @@ router.post('/lookup/cancel', lookupLimit, (req, res) => {
   const r = findByRef(req.body?.ref, req.body?.phone);
   if (!canCancel(r)) throw U.bad('This booking can no longer be cancelled online. Please call the branch.');
   run(`UPDATE ${r.type === 'booking' ? 'bookings' : 'reservations'} SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`, r.id);
+  mail.later(mail.notifyGuest('cancelled', r, r.type === 'booking'));
   res.json({ ...r, status: 'cancelled', can_cancel: false });
 });
 

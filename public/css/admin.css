@@ -81,3 +81,53 @@ dialog.modal::backdrop { background: rgba(11,30,50,.55); }
 .msg-card.unread { border-left: 5px solid var(--saffron); }
 .msg-card .meta { font-size: .82rem; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
 .msg-card p { white-space: pre-wrap; margin: 0 0 12px; }
+
+/* Photo uploader */
+.photo-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.photo-picker .pp-list { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+.photo-picker .pp-list:empty { display: none; }
+.pp-item { position: relative; width: 120px; height: 84px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--bg-soft); }
+.pp-item img { width: 100%; height: 100%; object-fit: cover; }
+.pp-cover { position: absolute; left: 6px; top: 6px; background: var(--saffron); color: #1d1606; font-size: .68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+.pp-tools { position: absolute; right: 4px; top: 4px; display: flex; gap: 4px; }
+.pp-tools button { width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: .75rem; line-height: 24px; padding: 0; }
+.pp-tools button:hover { background: var(--err); }
+.pp-add { cursor: pointer; }
+.photo-picker .hint { font-size: .78rem; color: var(--muted); }
+.room-cell { display: flex; gap: 10px; align-items: center; }
+.room-cell img, .room-cell .no-photo { width: 56px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; }
+.room-cell .no-photo { display: grid; place-items: center; background: var(--bg-soft); color: var(--muted); border: 1px dashed var(--line); }
+
+/* Availability grid */
+.av-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: .82rem; color: var(--muted); margin-bottom: 12px; }
+.av-key { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: -8px; vertical-align: middle; }
+.av-key.ok, .av-cell.ok { background: #E6F5EC; }
+.av-key.low, .av-cell.low { background: #FFF2D6; }
+.av-key.full, .av-cell.full { background: #FBE3E3; }
+.av-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: -8px; }
+table.av-table th, table.av-table td { padding: 8px 6px; text-align: center; }
+table.av-table th:first-child, table.av-table td:first-child { text-align: left; padding-left: 14px; min-width: 150px; position: sticky; left: 0; background: #fff; z-index: 1; }
+table.av-table th.today { color: var(--blue-900); background: #E8F1FA; }
+.av-cell { position: relative; width: 54px; padding: 6px 2px; border: 1px solid transparent; border-radius: 8px; cursor: pointer; font-family: inherit; line-height: 1.1; }
+.av-cell b { display: block; font-size: 1.05rem; color: var(--ink); }
+.av-cell small { font-size: .68rem; color: var(--muted); }
+.av-cell:hover { border-color: var(--blue); }
+.av-cell .av-dot { position: absolute; top: 4px; right: 4px; margin: 0; }
+.av-cell.ok b { color: var(--ok); } .av-cell.low b { color: #9a6200; } .av-cell.full b { color: var(--err); }
+
+/* Offers */
+.offer-admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.offer-admin { overflow: hidden; }
+.offer-admin.inactive { opacity: .55; }
+.oa-img { position: relative; height: 140px; background: var(--bg-soft); display: grid; place-items: center; color: var(--muted); }
+.oa-img img { width: 100%; height: 100%; object-fit: cover; }
+.oa-badge { position: absolute; left: 10px; top: 10px; background: var(--err); color: #fff; font-weight: 700; font-size: .78rem; padding: 3px 10px; border-radius: 999px; }
+.oa-body { padding: 14px 16px; }
+.oa-body small { display: block; color: var(--muted); font-size: .8rem; margin-top: 2px; }
+
+/* Email history */
+.email-box { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: .88rem; }
+.email-log { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 4px; }
+.email-log li.ok { color: var(--ok); } .email-log li.fail { color: var(--err); }
+.email-log small { color: var(--muted); display: block; margin-left: 16px; }
+.mt-1 { margin-top: 8px; }

@@ -64,7 +64,7 @@
               <div class="grid-2">
                 <div class="field"><label for="g-name">Full name *</label><input class="input" id="g-name" name="guest_name" required maxlength="100" autocomplete="name"></div>
                 <div class="field"><label for="g-phone">Mobile number *</label><input class="input" id="g-phone" name="phone" type="tel" required maxlength="20" autocomplete="tel" placeholder="98XXXXXXXX"><span class="hint">We'll call this number to confirm your booking.</span></div>
-                <div class="field span-2"><label for="g-email">Email (optional)</label><input class="input" id="g-email" name="email" type="email" maxlength="120" autocomplete="email"></div>
+                <div class="field span-2"><label for="g-email">Email *</label><input class="input" id="g-email" name="email" type="email" required maxlength="120" autocomplete="email"><span class="hint">We'll email you when we receive your booking and again when it's confirmed.</span></div>
                 <div class="field span-2"><label for="g-req">Special requests (optional)</label><textarea class="input" id="g-req" name="special_requests" maxlength="1000" placeholder="Late arrival, extra bed, ground-floor room…"></textarea></div>
               </div>
               <label class="check mt-2"><input type="checkbox" id="g-agree" required> I understand this is a reservation request; payment is made at the branch and the team will call me to confirm.</label>
@@ -94,7 +94,7 @@
                   </select></div>
                 <div class="field"><label for="t-name">Full name *</label><input class="input" id="t-name" name="name" required maxlength="100" autocomplete="name"></div>
                 <div class="field"><label for="t-phone">Mobile number *</label><input class="input" id="t-phone" name="phone" type="tel" required maxlength="20" autocomplete="tel" placeholder="98XXXXXXXX"></div>
-                <div class="field span-2"><label for="t-email">Email (optional)</label><input class="input" id="t-email" name="email" type="email" maxlength="120" autocomplete="email"></div>
+                <div class="field span-2"><label for="t-email">Email (optional)</label><input class="input" id="t-email" name="email" type="email" maxlength="120" autocomplete="email"><span class="hint">Add your email to get a confirmation by email.</span></div>
                 <div class="field span-2"><label for="t-notes">Notes (optional)</label><textarea class="input" id="t-notes" name="notes" maxlength="1000" placeholder="Cake, decoration, set menu, high chair…"></textarea></div>
               </div>
               <div id="t-err" class="form-error mt-2" hidden></div>

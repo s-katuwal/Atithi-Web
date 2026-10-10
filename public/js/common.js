@@ -41,6 +41,9 @@
     party: '<path d="M4 20 9 6l9 9z"/><path d="M14 4v2M18 6l-1.5 1.5M20 10h-2"/>',
     water: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
     print: '<path d="M6 9V3h12v6M6 18H4v-7h16v7h-2"/><rect x="6" y="14" width="12" height="7"/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 3.5 6 3.5 9s-1 6-3.5 9c-2.5-3-3.5-6-3.5-9s1-6 3.5-9z"/>',
     whatsapp: '<path d="M3 21l1.6-4.8A9 9 0 1 1 8 19.6z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.5-1.5-2-1-1 1c-1 0-2.5-1.5-2.5-2.5l1-1-1-2z"/>',
   };
   function icon(name, size = 20) {
@@ -107,8 +110,9 @@
     return data;
   }
 
-  let branchPromise;
+  let branchPromise, sitePromise;
   const getBranches = () => (branchPromise ||= api('/branches').catch(() => BRANCHES));
+  const getSite = () => (sitePromise ||= api('/site').catch(() => ({})));
 
   function toast(msg, type = '') {
     let wrap = $('.toast-wrap');
@@ -156,6 +160,18 @@
     </svg>`;
   }
 
+  /** Offer cards for the home and branch pages. */
+  const offerCards = (offers) => offers.map((o) => `<article class="card offer-card">
+      ${o.image_url ? `<div class="offer-img"><img src="${esc(o.image_url)}" alt="${esc(o.title)}" loading="lazy"></div>` : ''}
+      <div class="offer-body">
+        ${o.badge ? `<span class="offer-badge">${esc(o.badge)}</span>` : ''}
+        <h4>${esc(o.title)}</h4>
+        ${o.description ? `<p>${esc(o.description)}</p>` : ''}
+        <div class="offer-meta">${icon('pin', 14)} ${o.branch_id ? `${esc(o.branch_name)} — ${esc(o.branch_location)}` : 'All branches'}
+          ${o.valid_until ? ` · Until ${fmtDate(o.valid_until, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</div>
+        <a class="btn btn-accent btn-sm" href="/book${o.branch_id ? `?branch=${encodeURIComponent(o.branch_id)}` : ''}">Book now</a>
+      </div></article>`).join('');
+
   // ---------- Header ----------
   function renderHeader(active) {
     const el = $('#site-header');
@@ -192,6 +208,9 @@
     });
     links.addEventListener('click', (e) => { if (e.target.closest('a')) { links.classList.remove('open'); toggle.innerHTML = icon('menu', 28); } });
     getBranches().then((bs) => { $('#nav-branches').innerHTML = bs.map(item).join(''); });
+    getSite().then((s) => {
+      if (s.announcement) el.insertAdjacentHTML('afterbegin', `<div class="announce">${icon('tag', 16)} ${esc(s.announcement)}</div>`);
+    });
   }
 
   // ---------- Footer ----------
@@ -235,7 +254,7 @@
 
   window.Atithi = {
     LOGOS, BRANCHES, logoFor, icon, facilityIcon, esc, rs, $, $$, list, todayStr, addDays, fmtDate, fmtTime,
-    api, getBranches, toast, setBusy, telHref, waHref, roomArt, renderHeader, renderFooter,
+    api, getBranches, getSite, offerCards, toast, setBusy, telHref, waHref, roomArt, renderHeader, renderFooter,
   };
 
   document.addEventListener('DOMContentLoaded', () => {

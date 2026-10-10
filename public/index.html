@@ -21,8 +21,8 @@
       <div class="container">
         <div class="hero-card">
           <div class="ne-motto" lang="ne">अतिथि देवो भवः</div>
-          <h1>Stay, dine &amp; celebrate — <span>where every guest is God.</span></h1>
-          <p>Clean, comfortable rooms and authentic Nepali food at our three branches — Atithi Restro &amp; Lodge in Laxmipur and Birtamode, and the open-air Atithi Food Garden.</p>
+          <h1 id="heroTitle">Stay, dine &amp; celebrate — <span>where every guest is God.</span></h1>
+          <p id="heroText">Clean, comfortable rooms and authentic Nepali food at our three branches — Atithi Restro &amp; Lodge in Laxmipur and Birtamode, and the open-air Atithi Food Garden.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="/book?type=room" data-icon="bed">Book a Room</a>
             <a class="btn btn-accent" href="/book?type=table" data-icon="dish">Reserve a Table</a>
@@ -33,7 +33,7 @@
             <div><strong>2078</strong><span>Serving since (B.S.)</span></div>
           </div>
         </div>
-        <div class="hero-logo"><img src="/images/logo-atithi.jpg" alt="Atithi Restro logo — अतिथि रेष्ट्रो 2078"></div>
+        <div class="hero-logo" id="heroLogo"><img src="/images/logo-atithi.jpg" alt="Atithi Restro logo — अतिथि रेष्ट्रो 2078"></div>
       </div>
     </section>
 
@@ -61,6 +61,17 @@
       </form>
     </div>
 
+    <!-- Offers (shown only when staff add offers in Admin → Offers) -->
+    <section class="section" id="offers" hidden>
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Special offers</div>
+          <h2>Deals you won't want to miss</h2>
+        </div>
+        <div class="offer-grid" id="offerGrid"></div>
+      </div>
+    </section>
+
     <!-- Branches -->
     <section class="section" id="branches">
       <div class="container">
@@ -85,7 +96,7 @@
           <p style="font-size:1.1rem;color:#fff;margin-top:10px">“The guest is equal to God.”</p>
         </div>
         <div>
-          <p>This ancient Nepali value is the heart of Atithi. Whether you check in for one night at Laxmipur or Birtamode, or celebrate a birthday under the lights of the Food Garden, our family treats yours with care, cleanliness and honest home-style cooking.</p>
+          <p id="aboutText">This ancient Nepali value is the heart of Atithi. Whether you check in for one night at Laxmipur or Birtamode, or celebrate a birthday under the lights of the Food Garden, our family treats yours with care, cleanliness and honest home-style cooking.</p>
           <a class="btn btn-accent" href="/book">Plan your visit</a>
         </div>
       </div>
@@ -124,8 +135,8 @@
         </div>
         <div class="steps">
           <div class="card step"><h4>Choose branch &amp; dates</h4><p>Pick Laxmipur or Birtamode for a room, or any branch for a table. Live availability is shown instantly.</p></div>
-          <div class="card step"><h4>Enter your details</h4><p>Just your name and phone number. No advance payment needed — pay at the branch by cash, eSewa, Khalti or Fonepay.</p></div>
-          <div class="card step"><h4>Get your reference</h4><p>You receive a booking reference straight away. Our team calls to confirm, and you can check or cancel any time online.</p></div>
+          <div class="card step"><h4>Enter your details</h4><p>Just your name, phone number and email. No advance payment needed — pay at the branch by cash, eSewa, Khalti or Fonepay.</p></div>
+          <div class="card step"><h4>Get your reference</h4><p>You get a booking reference straight away and by email. We email you again as soon as it's confirmed, and you can check or cancel any time online.</p></div>
         </div>
         <div class="center mt-3"><a class="btn btn-primary" href="/book">Start booking</a> <a class="btn btn-ghost" href="/track">Check my booking</a></div>
       </div>

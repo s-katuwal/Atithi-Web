@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { $, $$, esc, rs, icon, list, api, getBranches, logoFor, todayStr, addDays, telHref, toast, setBusy } = window.Atithi;
+  const { $, $$, esc, rs, icon, list, api, getBranches, getSite, logoFor, todayStr, addDays, fmtDate, telHref, toast, setBusy, offerCards } = window.Atithi;
 
   document.addEventListener('DOMContentLoaded', async () => {
     $$('[data-icon]').forEach((el) => el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon, 18)));
@@ -28,6 +28,21 @@
     ];
     $('#features').innerHTML = features.map(([i, t, d]) =>
       `<div class="card feature"><div class="ico">${icon(i, 26)}</div><h4>${t}</h4><p>${d}</p></div>`).join('');
+
+    // Content edited in Admin → Website (empty fields keep the default text)
+    getSite().then((s) => {
+      if (s.hero_title || s.hero_highlight) $('#heroTitle').innerHTML = `${esc(s.hero_title)} ${s.hero_highlight ? `<span>${esc(s.hero_highlight)}</span>` : ''}`;
+      if (s.hero_text) $('#heroText').textContent = s.hero_text;
+      if (s.about_text) $('#aboutText').textContent = s.about_text;
+      if (s.hero_image) { $('#heroLogo').classList.add('photo'); $('#heroLogo').innerHTML = `<img src="${esc(s.hero_image)}" alt="Atithi">`; }
+    });
+
+    // Offers
+    api('/offers').then((offers) => {
+      if (!offers.length) return;
+      $('#offerGrid').innerHTML = offerCards(offers);
+      $('#offers').hidden = false;
+    }).catch(() => {});
 
     // Branches
     const branches = await getBranches();

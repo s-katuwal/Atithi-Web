@@ -155,6 +155,7 @@
     const err = $('#g-err'), btn = $('#g-submit');
     showErr(err, '');
     if (!$('#g-name').value.trim() || !$('#g-phone').value.trim()) return showErr(err, 'Please enter your name and mobile number.');
+    if (!$('#g-email').value.trim() || !$('#g-email').checkValidity()) return showErr(err, 'Please enter a valid email address so we can send your confirmation.');
     if (!$('#g-agree').checked) return showErr(err, 'Please tick the box to continue.');
     const fd = Object.fromEntries(new FormData(e.target));
     setBusy(btn, true, 'Booking…');
@@ -306,7 +307,7 @@
           <dt>Status</dt><dd><span class="status pending">Pending confirmation</span></dd>
         </dl>
       </div>
-      <p class="muted">Our team will call you shortly to confirm.${r.branch_phone ? ` Questions? Call <a href="${telHref(r.branch_phone)}">${esc(r.branch_phone)}</a>.` : ''}</p>
+      <p class="muted">${r.email ? `We've sent a copy to <strong>${esc(r.email)}</strong> and will email you again once your ${isBooking ? 'booking' : 'reservation'} is confirmed. ` : 'Our team will call you shortly to confirm. '}${r.branch_phone ? ` Questions? Call <a href="${telHref(r.branch_phone)}">${esc(r.branch_phone)}</a>.` : ''}</p>
       <div class="card-actions no-print" style="justify-content:center">
         <button class="btn btn-ghost" type="button" onclick="window.print()">${icon('print', 18)} Print</button>
         <a class="btn btn-primary" href="/track?ref=${encodeURIComponent(r.ref)}">View / manage booking</a>

@@ -129,7 +129,54 @@ CREATE TABLE IF NOT EXISTS sessions (
   admin_id   INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
   expires_at INTEGER NOT NULL
 );
+
+-- Rooms staff mark as booked/unavailable outside the website (walk-ins, phone bookings, repairs), per night.
+CREATE TABLE IF NOT EXISTS room_blocks (
+  room_type_id INTEGER NOT NULL REFERENCES room_types(id) ON DELETE CASCADE,
+  date         TEXT NOT NULL,
+  rooms        INTEGER NOT NULL,
+  note         TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (room_type_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS offers (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  branch_id   TEXT REFERENCES branches(id),
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  badge       TEXT NOT NULL DEFAULT '',
+  image_url   TEXT NOT NULL DEFAULT '',
+  valid_until TEXT NOT NULL DEFAULT '',
+  active      INTEGER NOT NULL DEFAULT 1,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS email_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  ref        TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL,
+  recipient  TEXT NOT NULL,
+  subject    TEXT NOT NULL,
+  ok         INTEGER NOT NULL,
+  error      TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_email_log_ref ON email_log(ref);
 `);
+
+// Columns added after the first release.
+function addColumn(table, col, def) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+  }
+}
+addColumn('room_types', 'photos', "TEXT NOT NULL DEFAULT '[]'"); // JSON array of extra photo URLs
 
 const all = (sql, ...p) => db.prepare(sql).all(...p);
 const get = (sql, ...p) => db.prepare(sql).get(...p);
@@ -282,4 +329,13 @@ seed();
 ensureAdmin();
 run('DELETE FROM sessions WHERE expires_at < ?', Date.now());
 
-module.exports = { db, all, get, run, tx, hashPassword, verifyPassword };
+// ---------------- Key/value settings ----------------
+function getSettings() {
+  return Object.fromEntries(all('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
+}
+function saveSettings(obj) {
+  const st = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+  tx(() => { for (const [k, v] of Object.entries(obj)) st.run(k, String(v ?? '')); });
+}
+
+module.exports = { db, DATA_DIR, all, get, run, tx, hashPassword, verifyPassword, getSettings, saveSettings };
