@@ -418,7 +418,12 @@ const SETTING_FIELDS = {
 router.get('/settings', (req, res) => {
   const s = getSettings();
   const out = Object.fromEntries(Object.keys(SETTING_FIELDS).map((k) => [k, s[k] || '']));
-  res.json({ ...out, smtp_pass_set: Boolean(s.smtp_pass || process.env.SMTP_PASS), email_ready: mail.isConfigured() });
+  res.json({
+    ...out,
+    smtp_pass_set: Boolean(s.smtp_pass || process.env.SMTP_PASS),
+    resend_key_set: Boolean(s.resend_api_key || process.env.RESEND_API_KEY),
+    email_ready: mail.isConfigured(), email_provider: mail.provider(),
+  });
 });
 router.put('/settings', (req, res) => {
   const x = req.body || {};
@@ -430,8 +435,13 @@ router.put('/settings', (req, res) => {
   if (out.mail_from) U.email(out.mail_from);
   if (out.notify_email) out.notify_email.split(',').forEach((e) => U.email(e.trim()));
   if (out.site_url && !/^https?:\/\//i.test(out.site_url)) throw U.bad('Website address must start with http:// or https://');
-  // Password is write-only: blank keeps the saved one.
+  // Secrets are write-only: blank keeps the saved one; remove_resend_key clears it.
   if (typeof x.smtp_pass === 'string' && x.smtp_pass) out.smtp_pass = x.smtp_pass.slice(0, 200);
+  if (typeof x.resend_api_key === 'string' && x.resend_api_key.trim()) {
+    out.resend_api_key = x.resend_api_key.trim().slice(0, 200);
+    if (!out.resend_api_key.startsWith('re_')) throw U.bad('A Resend API key starts with "re_"');
+  }
+  if (x.remove_resend_key) out.resend_api_key = '';
   saveSettings(out);
   res.json({ ok: true });
 });

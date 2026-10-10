@@ -23,7 +23,7 @@ npm start
   - To use a different first password, start the server with `ADMIN_PASSWORD=yourpass npm start` before the first run.
 
 Data is saved in `data/atithi.db` and uploaded photos in `data/uploads/`. Back up the `data` folder regularly.
-Environment variables: `PORT` (default 3000), `DATA_DIR` (default `./data`), `ADMIN_PASSWORD` (used on first run only).
+**Environment variables:** copy `.env.example` to `.env.local` and fill in your values: the Resend key, sender address, `PORT` (default 3000), `DATA_DIR` (default `./data`) and `ADMIN_PASSWORD` (used on first run only). `npm start` and `npm run dev` load `.env.local` automatically, and git ignores it. On a host such as Render, Railway or Vercel, add the same variables in the host's dashboard instead.
 
 ## What guests can do
 - **Book a room** (Laxmipur / Birtamode). Availability is checked live and overbooking is blocked. The price total is calculated automatically.
@@ -49,7 +49,14 @@ There is no online payment step. Guests pay at the branch.
 - When staff set a booking to **Confirmed**, the guest gets a **confirmation email**. If a booking is **cancelled** (by staff or by the guest at `/track`), the guest gets a cancellation email.
 - Email is **required** for room bookings and optional for table reservations.
 - Each booking's **Details** screen shows which emails were sent, and has buttons to resend them.
-- Set it up in **Admin → Settings & email**, then click **Send test email**. For Gmail use `smtp.gmail.com`, port `587`, your Gmail address, and a Gmail **App password**. Your normal Gmail password won't work. You can also use `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `NOTIFY_EMAIL` and `SITE_URL` environment variables instead.
+- Emails are sent with **[Resend](https://resend.com)**. To set it up:
+  1. In Resend, go to **Domains**, add your domain (e.g. `atithi.com.np`) and add the DNS records it shows at your domain provider.
+  2. Go to **API Keys** and create a key with "Sending access".
+  3. In **Admin → Settings & email**, paste the key, set "Send emails from" to an address on your domain (e.g. `bookings@atithi.com.np`), then click **Send test email**.
+  - Until your domain is verified, you can only test with `onboarding@resend.dev` as the sender, and it delivers only to your own Resend account email.
+  - You can use the `RESEND_API_KEY`, `MAIL_FROM`, `NOTIFY_EMAIL` and `SITE_URL` environment variables instead of the admin screen.
+- Guest replies go to the branch email set in Admin → Branches.
+- An SMTP server (e.g. Gmail) still works as a fallback. It is used only when no Resend key is set.
 
 ## Before going live — update these in Admin
 1. **Branches**: phone numbers, WhatsApp numbers, emails, and the **Food Garden address and location label**. A floating WhatsApp button appears automatically once a WhatsApp number is set.

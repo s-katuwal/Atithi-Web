@@ -621,21 +621,34 @@
         <button class="btn btn-primary mt-3" type="submit">Update password</button>
       </form>
       <form class="card card-pad mt-3" id="mailForm" style="max-width:820px">
-        <h3 style="color:var(--blue-900);font-size:1.1rem">Booking emails <span class="status ${s.email_ready ? 'confirmed' : 'pending'}" style="font-size:.75rem;vertical-align:middle">${s.email_ready ? 'Set up' : 'Not set up'}</span></h3>
-        <p class="muted" style="font-size:.88rem">Guests get an email when they book, when you confirm, and if it is cancelled. Staff get an alert for each new booking.
-          <br><strong>Using Gmail?</strong> Server <code>smtp.gmail.com</code>, port <code>587</code>, username = your Gmail address, password = a Gmail <em>App password</em>
-          (Google Account → Security → 2-Step Verification → App passwords). Your normal Gmail password will not work.</p>
-        <div class="grid-2">
-          ${field('Mail server (SMTP host)', inp('smtp_host', s.smtp_host, 'maxlength="120" placeholder="smtp.gmail.com"'))}
-          ${field('Port', inp('smtp_port', s.smtp_port, 'maxlength="5" inputmode="numeric" placeholder="587"'))}
-          ${field('Username', inp('smtp_user', s.smtp_user, 'maxlength="120" autocomplete="off" placeholder="yourname@gmail.com"'))}
-          ${field('Password / app password', `<input class="input" type="password" name="smtp_pass" maxlength="200" autocomplete="new-password" placeholder="${s.smtp_pass_set ? '•••••••• saved. Leave blank to keep it.' : ''}">`)}
-          ${field('Send emails from (address)', inp('mail_from', s.mail_from, 'type="email" maxlength="120" placeholder="Same as username"'))}
+        <h3 style="color:var(--blue-900);font-size:1.1rem">Booking emails <span class="status ${s.email_ready ? 'confirmed' : 'pending'}" style="font-size:.75rem;vertical-align:middle">${s.email_ready ? `Sending with ${s.email_provider === 'resend' ? 'Resend' : 'SMTP'}` : 'Not set up'}</span></h3>
+        <p class="muted" style="font-size:.88rem">Guests get an email when they book, when you confirm, and if it is cancelled. Staff get an alert for each new booking. Guest replies go to the branch email.</p>
+        <div class="email-box">
+          <strong>Resend (recommended)</strong>
+          <p class="muted mb-0" style="font-size:.85rem">1. Sign up at <a href="https://resend.com" target="_blank" rel="noopener">resend.com</a> → <em>Domains</em> → add your domain (e.g. atithi.com.np) and add the DNS records it shows.
+            2. <em>API Keys</em> → create a key with “Sending access” and paste it below.
+            3. Set “Send emails from” to an address on that domain, e.g. <code>bookings@atithi.com.np</code>.
+            <br>Until the domain is verified you can only test with <code>onboarding@resend.dev</code>, which delivers only to your own Resend account email.</p>
+          <div class="grid-2 mt-2">
+            ${field('Resend API key', `<input class="input" type="password" name="resend_api_key" maxlength="200" autocomplete="off" placeholder="${s.resend_key_set ? '•••••••• saved. Leave blank to keep it.' : 're_xxxxxxxxx'}">`)}
+            ${s.resend_key_set ? `<label class="check" style="align-self:end"><input type="checkbox" name="remove_resend_key"> Remove saved key (use SMTP instead)</label>` : '<span></span>'}
+          </div>
+        </div>
+        <div class="grid-2 mt-2">
+          ${field('Send emails from (address) *', inp('mail_from', s.mail_from, 'type="email" maxlength="120" placeholder="bookings@yourdomain.com"'))}
           ${field('Sender name', inp('mail_from_name', s.mail_from_name, 'maxlength="80" placeholder="Atithi Restro & Lodge"'))}
           ${field('Send new-booking alerts to (staff emails, comma separated)', inp('notify_email', s.notify_email, 'maxlength="300" placeholder="owner@example.com"'), 'span-2')}
           ${field('Website address (for the “manage my booking” link in emails)', inp('site_url', s.site_url, 'maxlength="200" placeholder="https://atithi.com.np"'), 'span-2')}
         </div>
         <p class="muted" style="font-size:.82rem">Branch emails set in Branches also get new-booking alerts for their branch.</p>
+        <details class="mt-2"><summary class="muted" style="cursor:pointer;font-size:.88rem">Use an SMTP server instead (e.g. Gmail). Only used when no Resend key is saved.</summary>
+          <div class="grid-2 mt-2">
+            ${field('Mail server (SMTP host)', inp('smtp_host', s.smtp_host, 'maxlength="120" placeholder="smtp.gmail.com"'))}
+            ${field('Port', inp('smtp_port', s.smtp_port, 'maxlength="5" inputmode="numeric" placeholder="587"'))}
+            ${field('Username', inp('smtp_user', s.smtp_user, 'maxlength="120" autocomplete="off" placeholder="yourname@gmail.com"'))}
+            ${field('Password / app password', `<input class="input" type="password" name="smtp_pass" maxlength="200" autocomplete="new-password" placeholder="${s.smtp_pass_set ? '•••••••• saved. Leave blank to keep it.' : ''}">`)}
+          </div>
+        </details>
         <button class="btn btn-primary mt-2" type="submit">Save email settings</button>
         <div class="filters mt-3" style="margin-bottom:0">
           ${field('Send a test email to', '<input class="input" type="email" id="testTo" placeholder="you@example.com">', 'grow')}
@@ -646,7 +659,7 @@
         e.preventDefault();
         const btn = e.target.querySelector('button[type=submit]');
         setBusy(btn, true, 'Saving…');
-        try { await api('/settings', { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); toast('Email settings saved', 'ok'); views.settings.render(el); } catch (x) { toast(x.message, 'err'); } finally { setBusy(btn, false); }
+        try { const fd = Object.fromEntries(new FormData(e.target)); await api('/settings', { method: 'PUT', body: { ...fd, remove_resend_key: !!fd.remove_resend_key } }); toast('Email settings saved', 'ok'); views.settings.render(el); } catch (x) { toast(x.message, 'err'); } finally { setBusy(btn, false); }
       };
       $('#testBtn').onclick = async (e) => {
         setBusy(e.target, true, 'Sending…');
