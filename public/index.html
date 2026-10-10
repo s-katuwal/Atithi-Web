@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atithi Restro & Lodge · Atithi Food Garden — Book Online</title>
+  <meta name="description" content="Atithi Restro & Lodge (Laxmipur and Birtamode) and Atithi Food Garden. Book rooms and reserve tables online. अतिथि देवो भवः — A guest is like God.">
+  <meta name="theme-color" content="#1774BC">
+  <link rel="icon" href="/images/favicon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Mukta:wght@500;600;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="home">
+  <div id="site-header"></div>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-card">
+          <div class="ne-motto" lang="ne">अतिथि देवो भवः</div>
+          <h1>Stay, dine &amp; celebrate — <span>where every guest is God.</span></h1>
+          <p>Clean, comfortable rooms and authentic Nepali food at our three branches — Atithi Restro &amp; Lodge in Laxmipur and Birtamode, and the open-air Atithi Food Garden.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="/book?type=room" data-icon="bed">Book a Room</a>
+            <a class="btn btn-accent" href="/book?type=table" data-icon="dish">Reserve a Table</a>
+          </div>
+          <div class="hero-badges">
+            <div><strong>3</strong><span>Branches</span></div>
+            <div><strong>2</strong><span>Lodges with rooms</span></div>
+            <div><strong>2078</strong><span>Serving since (B.S.)</span></div>
+          </div>
+        </div>
+        <div class="hero-logo"><img src="/images/logo-atithi.jpg" alt="Atithi Restro logo — अतिथि रेष्ट्रो 2078"></div>
+      </div>
+    </section>
+
+    <!-- Quick availability search -->
+    <div class="container">
+      <form class="quick-book" id="quickBook" action="/book" method="get">
+        <input type="hidden" name="type" value="room">
+        <div class="field">
+          <label for="qb-branch">Branch</label>
+          <select class="input" id="qb-branch" name="branch"></select>
+        </div>
+        <div class="field">
+          <label for="qb-ci">Check-in</label>
+          <input class="input" type="date" id="qb-ci" name="ci" required>
+        </div>
+        <div class="field">
+          <label for="qb-co">Check-out</label>
+          <input class="input" type="date" id="qb-co" name="co" required>
+        </div>
+        <div class="field">
+          <label for="qb-guests">Guests</label>
+          <select class="input" id="qb-guests" name="adults"></select>
+        </div>
+        <button class="btn btn-primary" type="submit" data-icon="search">Check availability</button>
+      </form>
+    </div>
+
+    <!-- Branches -->
+    <section class="section" id="branches">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Our Branches</div>
+          <h2>One family, three welcoming places</h2>
+          <p>Choose the branch that suits you — stay overnight at our lodges or gather with loved ones at the Food Garden.</p>
+        </div>
+        <div class="branch-grid" id="branchGrid">
+          <div class="skeleton" style="height:420px"></div>
+          <div class="skeleton" style="height:420px"></div>
+          <div class="skeleton" style="height:420px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Motto band -->
+    <section class="motto-band">
+      <div class="container">
+        <div>
+          <div class="big-ne" lang="ne">अतिथि देवो भवः</div>
+          <p style="font-size:1.1rem;color:#fff;margin-top:10px">“The guest is equal to God.”</p>
+        </div>
+        <div>
+          <p>This ancient Nepali value is the heart of Atithi. Whether you check in for one night at Laxmipur or Birtamode, or celebrate a birthday under the lights of the Food Garden, our family treats yours with care, cleanliness and honest home-style cooking.</p>
+          <a class="btn btn-accent" href="/book">Plan your visit</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why stay -->
+    <section class="section section-soft">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Why Atithi</div>
+          <h2>Everything you need, nothing you don't</h2>
+        </div>
+        <div class="features" id="features"></div>
+      </div>
+    </section>
+
+    <!-- Popular dishes -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">From our kitchens</div>
+          <h2>Guest favourites</h2>
+          <p>Fresh momo, full Nepali khana sets and smoky sekuwa — see each branch page for the full menu.</p>
+        </div>
+        <div class="menu-tabs" id="dishTabs"></div>
+        <div class="dish-grid" id="dishGrid"></div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section section-soft">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Book online</div>
+          <h2>Booking takes less than a minute</h2>
+        </div>
+        <div class="steps">
+          <div class="card step"><h4>Choose branch &amp; dates</h4><p>Pick Laxmipur or Birtamode for a room, or any branch for a table. Live availability is shown instantly.</p></div>
+          <div class="card step"><h4>Enter your details</h4><p>Just your name and phone number. No advance payment needed — pay at the branch by cash, eSewa, Khalti or Fonepay.</p></div>
+          <div class="card step"><h4>Get your reference</h4><p>You receive a booking reference straight away. Our team calls to confirm, and you can check or cancel any time online.</p></div>
+        </div>
+        <div class="center mt-3"><a class="btn btn-primary" href="/book">Start booking</a> <a class="btn btn-ghost" href="/track">Check my booking</a></div>
+      </div>
+    </section>
+
+    <!-- Contact -->
+    <section class="section" id="contact">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Contact</div>
+          <h2>We're happy to help</h2>
+          <p>Questions about rooms, group stays, parties or catering? Send us a message and the right branch will get back to you.</p>
+        </div>
+        <div class="contact-grid">
+          <div id="contactBranches"></div>
+          <form class="card card-pad" id="contactForm" novalidate>
+            <div class="grid-2">
+              <div class="field"><label for="c-name">Your name *</label><input class="input" id="c-name" name="name" required maxlength="100" autocomplete="name"></div>
+              <div class="field"><label for="c-branch">Branch</label><select class="input" id="c-branch" name="branch_id"><option value="">Any / general</option></select></div>
+              <div class="field"><label for="c-phone">Phone</label><input class="input" id="c-phone" name="phone" type="tel" maxlength="20" autocomplete="tel" placeholder="98XXXXXXXX"></div>
+              <div class="field"><label for="c-email">Email</label><input class="input" id="c-email" name="email" type="email" maxlength="120" autocomplete="email"></div>
+              <div class="field span-2"><label for="c-msg">Message *</label><textarea class="input" id="c-msg" name="message" required maxlength="2000"></textarea></div>
+            </div>
+            <div id="contactMsg" class="mt-2" hidden></div>
+            <button class="btn btn-primary mt-2" type="submit">Send message</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/home.js"></script>
+</body>
+</html>

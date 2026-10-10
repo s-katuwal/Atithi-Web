@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Atithi Admin</title>
+  <link rel="icon" href="/images/favicon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Mukta:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin">
+  <!-- Login -->
+  <div class="login-wrap" id="loginView" hidden>
+    <form class="login-card" id="loginForm">
+      <img src="/images/logo-atithi.jpg" alt="Atithi logo">
+      <h1>Staff login</h1>
+      <p class="muted center" style="font-size:.9rem">Manage bookings for all Atithi branches</p>
+      <div class="field mt-2"><label for="lg-user">Username</label><input class="input" id="lg-user" autocomplete="username" required value="admin"></div>
+      <div class="field mt-2"><label for="lg-pass">Password</label><input class="input" id="lg-pass" type="password" autocomplete="current-password" required></div>
+      <div id="lg-err" class="form-error mt-2" hidden></div>
+      <button class="btn btn-primary btn-block mt-3" type="submit" id="lg-btn">Log in</button>
+      <p class="center mt-2 mb-0"><a href="/" style="font-size:.88rem">← Back to website</a></p>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="appView" hidden>
+    <div class="mobile-bar"><button id="sbOpen" aria-label="Open menu"></button><strong>Atithi Admin</strong></div>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sb-brand"><img src="/images/logo-atithi.jpg" alt=""><div><strong>Atithi Admin</strong><small id="whoami"></small></div></div>
+        <nav id="sbNav"></nav>
+        <div class="sb-foot">
+          <a href="/" target="_blank" rel="noopener">View website ↗</a>
+          <button type="button" id="logoutBtn">Log out</button>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="main-head"><h1 id="viewTitle"></h1><div id="viewActions" class="card-actions"></div></div>
+        <div id="view"></div>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="modal" id="modal">
+    <form method="dialog" id="modalForm" novalidate>
+      <div class="modal-head"><h3 id="modalTitle"></h3><button type="button" id="modalClose" aria-label="Close">✕</button></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </form>
+  </dialog>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

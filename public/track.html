@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage My Booking — Atithi</title>
+  <meta name="theme-color" content="#1774BC">
+  <link rel="icon" href="/images/favicon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Mukta:wght@500;600;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="track">
+  <div id="site-header"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-wrap container">
+      <div class="inner">
+        <img class="logo" src="/images/logo-atithi.jpg" alt="Atithi logo">
+        <div style="flex:1">
+          <div class="eyebrow left">Manage booking</div>
+          <h1>Check or cancel your booking</h1>
+          <p>Enter the booking reference you received and the phone number you used.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main class="section">
+    <div class="container" style="max-width:760px">
+      <form class="card card-pad" id="lookupForm" novalidate>
+        <div class="grid-2">
+          <div class="field"><label for="l-ref">Booking reference</label><input class="input" id="l-ref" name="ref" required maxlength="20" placeholder="e.g. BK-LX-7K3P9Q" style="text-transform:uppercase"></div>
+          <div class="field"><label for="l-phone">Phone number</label><input class="input" id="l-phone" name="phone" type="tel" required maxlength="20" autocomplete="tel" placeholder="98XXXXXXXX"></div>
+        </div>
+        <div id="l-err" class="form-error mt-2" hidden></div>
+        <button class="btn btn-primary mt-3" type="submit" id="l-submit">Find my booking</button>
+      </form>
+      <div id="result" class="mt-3"></div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/track.js"></script>
+</body>
+</html>
