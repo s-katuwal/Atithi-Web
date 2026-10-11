@@ -128,7 +128,7 @@
     title: 'Dashboard',
     async render(el) {
       const s = await api('/stats');
-      counts = { bookings: s.pending_bookings, reservations: s.pending_reservations, messages: s.unread_messages };
+      counts = { bookings: s.pending_bookings, reservations: s.pending_reservations, messages: s.unread_messages, careers: s.new_applications };
       drawNav();
       el.innerHTML = `
         <div class="stats">
@@ -582,29 +582,212 @@
 
   views.website = {
     title: 'Website content',
+    actions: '<a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">View website ↗</a>',
     async render(el) {
-      const s = await api('/settings');
-      el.innerHTML = `<p class="muted" style="font-size:.9rem">Change the text and pictures on the home page. Leave a box empty to use the default text (shown in grey).
-          Branch details, rooms, menu and offers have their own pages in this panel.</p>
-        <form class="card card-pad" id="siteForm" style="max-width:820px">
-          <div class="grid-2">
-            ${field('Announcement bar (top of every page, optional)', inp('announcement', s.announcement, 'maxlength="200" placeholder="e.g. Dashain & Tihar bookings now open!"'), 'span-2')}
-            ${field('Home page heading', inp('hero_title', s.hero_title, 'maxlength="120" placeholder="Stay, dine & celebrate —"'))}
-            ${field('Heading highlight (coloured part)', inp('hero_highlight', s.hero_highlight, 'maxlength="120" placeholder="where every guest is God."'))}
-            ${field('Home page intro text', `<textarea class="input" name="hero_text" maxlength="400" placeholder="Clean, comfortable rooms and authentic Nepali food at our three branches…">${esc(s.hero_text)}</textarea>`, 'span-2')}
-            ${field('Home page main picture (replaces the round logo)', photoPicker('hero_image', [s.hero_image]), 'span-2')}
-            ${field('“About us” text (blue band on home page)', `<textarea class="input" name="about_text" maxlength="1000" placeholder="This ancient Nepali value is the heart of Atithi…">${esc(s.about_text)}</textarea>`, 'span-2')}
-          </div>
-          <button class="btn btn-primary mt-3" type="submit">Save website content</button>
-          <a class="btn btn-ghost mt-3" href="/" target="_blank" rel="noopener">View website ↗</a>
+      const { groups, values } = await api('/content');
+      const val = (f) => (values[f.key] !== '' && values[f.key] != null ? values[f.key] : f.default);
+      const input = (f) => {
+        const v = val(f);
+        switch (f.type) {
+          case 'textarea': return `<textarea class="input" name="${f.key}" rows="3">${esc(v)}</textarea>`;
+          case 'list': return `<textarea class="input mono" name="${f.key}" rows="${Math.min(10, v.split('\n').length + 1)}">${esc(v)}</textarea><span class="hint">One per line: ${esc(f.hint)}</span>`;
+          case 'image': return photoPicker(f.key, [v]);
+          case 'color': return `<div class="color-row"><input type="color" value="${esc(v || f.default)}" data-color-for="${f.key}"><input class="input" name="${f.key}" value="${esc(v)}" maxlength="7"></div>`;
+          case 'toggle': return `<select class="input" name="${f.key}"><option value="1" ${v === '1' ? 'selected' : ''}>Show</option><option value="0" ${v === '0' ? 'selected' : ''}>Hide</option></select>`;
+          case 'url': return `<input class="input" name="${f.key}" value="${esc(v)}" type="url" placeholder="https://…">`;
+          default: return `<input class="input" name="${f.key}" value="${esc(v)}">`;
+        }
+      };
+      el.innerHTML = `<p class="muted" style="font-size:.9rem">Change any text, picture, list or section on the website, then click <strong>Save all changes</strong>.
+          Click ↺ to put a field back to its original text. Rooms, menu, offers, gallery and jobs have their own pages in this panel.</p>
+        <form id="contentForm">
+          ${groups.map((g, gi) => `<details class="card content-group" ${gi === 0 ? 'open' : ''}><summary>${esc(g.title)}</summary>
+            <div class="grid-2">${g.fields.map((f) => `<div class="field ${['textarea', 'list', 'image'].includes(f.type) ? 'span-2' : ''}">
+              <label>${esc(f.label)} ${f.type !== 'image' && f.default ? `<button type="button" class="reset-btn" data-reset="${f.key}" title="Back to original">↺</button>` : ''}</label>
+              ${input(f)}</div>`).join('')}</div></details>`).join('')}
+          <div class="save-bar"><button class="btn btn-primary" type="submit">Save all changes</button><span class="muted" id="saveHint"></span></div>
         </form>`;
       initPhotoPickers(el);
-      $('#siteForm').onsubmit = async (e) => {
+      const form = $('#contentForm');
+      const defaults = Object.fromEntries(groups.flatMap((g) => g.fields).map((f) => [f.key, f.default]));
+      form.addEventListener('input', (e) => {
+        if (e.target.dataset.colorFor) form.elements[e.target.dataset.colorFor].value = e.target.value;
+        $('#saveHint').textContent = 'You have unsaved changes';
+      });
+      form.addEventListener('click', (e) => {
+        const r = e.target.closest('[data-reset]');
+        if (!r) return;
+        const k = r.dataset.reset, input = form.elements[k];
+        input.value = defaults[k];
+        const picker = form.querySelector(`[data-color-for="${k}"]`);
+        if (picker) picker.value = defaults[k];
+        $('#saveHint').textContent = 'You have unsaved changes';
+      });
+      form.onsubmit = async (e) => {
         e.preventDefault();
-        const fd = Object.fromEntries(new FormData(e.target));
-        const btn = e.target.querySelector('button[type=submit]');
+        const body = {};
+        for (const [k, v] of new FormData(form)) body[k] = groups.some((g) => g.fields.some((f) => f.key === k && f.type === 'image')) ? parsePhotos(v)[0] || '' : v;
+        const btn = form.querySelector('button[type=submit]');
         setBusy(btn, true, 'Saving…');
-        try { await api('/settings', { method: 'PUT', body: { ...fd, hero_image: parsePhotos(fd.hero_image)[0] || '' } }); toast('Website content saved', 'ok'); } catch (x) { toast(x.message, 'err'); } finally { setBusy(btn, false); }
+        try { await api('/content', { method: 'PUT', body }); toast('Website updated', 'ok'); $('#saveHint').textContent = 'All changes saved'; } catch (x) { toast(x.message, 'err'); } finally { setBusy(btn, false); }
+      };
+    },
+  };
+
+  views.gallery = {
+    title: 'Gallery',
+    actions: `<label class="btn btn-accent btn-sm" style="cursor:pointer">+ Upload photos<input type="file" id="galUpload" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></label>`,
+    async render(el) {
+      const rows = await api('/gallery');
+      const cats = [...new Set(['Rooms', 'Food', 'Events', 'Garden', ...rows.map((r) => r.category)])];
+      el.innerHTML = `<p class="muted" style="font-size:.9rem">Photos appear on the Gallery page (and the newest on the home page). Click a photo to add a caption, category or branch.</p>
+        <div id="galProgress" class="muted" hidden></div>
+        ${rows.length ? `<div class="gal-admin">${rows.map((r) => `<div class="card gal-card ${r.active ? '' : 'inactive'}" data-id="${r.id}">
+            <img src="${esc(r.image_url)}" alt="">
+            <div class="gal-body"><strong>${esc(r.caption || 'No caption')}</strong><small>${esc(r.category)}${r.branch_location ? ' · ' + esc(r.branch_location) : ''}${r.active ? '' : ' · hidden'}</small>
+            <div class="card-actions mt-1"><button class="btn btn-ghost btn-sm" data-edit>Edit</button><button class="btn btn-ghost btn-sm" data-del>Delete</button></div></div></div>`).join('')}</div>`
+          : '<div class="card empty">No photos yet. Click “Upload photos” to add some.</div>'}`;
+      $('#galUpload').onchange = async (e) => {
+        const files = [...e.target.files];
+        e.target.value = '';
+        const prog = $('#galProgress');
+        prog.hidden = false;
+        for (const [i, f] of files.entries()) {
+          prog.textContent = `Uploading ${i + 1} of ${files.length}…`;
+          try { await api('/gallery', { method: 'POST', body: { image_url: await uploadImage(f), category: 'General' } }); } catch (x) { toast(`${f.name}: ${x.message}`, 'err'); }
+        }
+        toast('Photos added', 'ok');
+        views.gallery.render(el);
+      };
+      el.onclick = async (e) => {
+        const card = e.target.closest('[data-id]');
+        if (!card) return;
+        const r = rows.find((x) => x.id === Number(card.dataset.id));
+        if (e.target.matches('[data-del]')) {
+          if (!confirm('Delete this photo from the gallery?')) return;
+          try { await api(`/gallery/${r.id}`, { method: 'DELETE' }); toast('Photo deleted', 'ok'); views.gallery.render(el); } catch (x) { toast(x.message, 'err'); }
+          return;
+        }
+        if (!e.target.matches('[data-edit]') && !e.target.matches('img')) return;
+        openModal({
+          title: 'Edit photo',
+          body: `<datalist id="galCats">${cats.map((c) => `<option value="${esc(c)}">`).join('')}</datalist><div class="grid-2">
+            ${field('Photo', photoPicker('image', [r.image_url]), 'span-2')}
+            ${field('Caption', inp('caption', r.caption, 'maxlength="200" placeholder="e.g. Deluxe room, Laxmipur"'), 'span-2')}
+            ${field('Category (used for the filter buttons)', inp('category', r.category, 'list="galCats" maxlength="40"'))}
+            ${field('Branch', `<select class="input" name="branch_id">${branchOptions(r.branch_id || '', () => true, 'All / none')}</select>`)}
+            ${field('Display order (lower first)', inp('sort_order', r.sort_order, 'type="number" min="0"'))}
+            <label class="check"><input type="checkbox" name="active" ${r.active ? 'checked' : ''}> Show on website</label>
+          </div>`,
+          onSubmit: async (fd) => {
+            await api(`/gallery/${r.id}`, { method: 'PUT', body: { ...fd, image_url: parsePhotos(fd.image)[0] || r.image_url, active: !!fd.active, sort_order: Number(fd.sort_order) } });
+            toast('Photo saved', 'ok');
+            views.gallery.render(el);
+          },
+        });
+      };
+    },
+  };
+
+  const APP_STATUSES = ['new', 'reviewed', 'shortlisted', 'hired', 'rejected'];
+  views.careers = {
+    title: 'Careers',
+    actions: '<button class="btn btn-accent btn-sm" id="addJob">+ Add job opening</button>',
+    async render(el, params) {
+      const tab = params.get('tab') || 'applications';
+      const [jobs, apps] = await Promise.all([api('/jobs'), api('/applications')]);
+      const t = todayStr();
+      el.innerHTML = `<div class="menu-tabs admin-tabs"><a href="#careers?tab=applications" class="${tab === 'applications' ? 'active' : ''}">Applications (${apps.length})</a>
+          <a href="#careers?tab=jobs" class="${tab === 'jobs' ? 'active' : ''}">Job openings (${jobs.length})</a></div>
+        <div id="careersBody"></div>`;
+      const body = $('#careersBody');
+      if (tab === 'jobs') {
+        body.innerHTML = jobs.length ? `<div class="table-wrap"><table class="data"><thead><tr><th>Job</th><th>Branch</th><th>Deadline</th><th>Applications</th><th>Status</th><th></th></tr></thead><tbody>
+          ${jobs.map((j) => {
+            const expired = j.deadline && j.deadline < t;
+            return `<tr class="${j.active && !expired ? '' : 'inactive'}" data-id="${j.id}"><td><strong>${esc(j.title)}</strong><small>${esc(j.job_type)}${j.salary ? ' · ' + esc(j.salary) : ''}</small></td>
+              <td>${esc(j.branch_location || 'Any branch')}</td><td>${j.deadline ? fmtDate(j.deadline, { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+              <td>${j.applications}</td><td>${j.active ? (expired ? 'Closed (deadline passed)' : 'Open') : 'Hidden'}</td>
+              <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-edit-job>Edit</button> <button class="btn btn-ghost btn-sm" data-del-job>Delete</button></td></tr>`;
+          }).join('')}</tbody></table></div>` : '<div class="card empty">No job openings yet. Click “Add job opening”. The Careers page still accepts general applications.</div>';
+      } else {
+        body.innerHTML = apps.length ? `<div class="table-wrap"><table class="data"><thead><tr><th>Applicant</th><th>Position</th><th>Experience</th><th>Received</th><th>CV</th><th>Status</th><th></th></tr></thead><tbody>
+          ${apps.map((a) => `<tr data-id="${a.id}"><td><strong>${esc(a.name)}</strong><small><a href="${telHref(a.phone)}">${esc(a.phone)}</a>${a.email ? ` · ${esc(a.email)}` : ''}</small></td>
+            <td>${esc(a.position)}</td><td>${esc(a.experience || '—')}</td><td>${esc(a.created_at.slice(0, 10))}</td>
+            <td>${a.has_cv ? `<button class="btn btn-ghost btn-sm" data-cv>Download</button>` : '—'}</td>
+            <td>${statusSelect(a.status, APP_STATUSES, 'data-app-status')}</td>
+            <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-view-app>Details</button></td></tr>`).join('')}</tbody></table></div>`
+          : '<div class="card empty">No applications yet. They will appear here when someone applies on the Careers page.</div>';
+      }
+      const jobForm = (j = { active: 1, job_type: 'Full-time' }) => openModal({
+        title: j.id ? 'Edit job opening' : 'Add job opening',
+        body: `<div class="grid-2">
+          ${field('Job title *', inp('title', j.title, 'required maxlength="100" placeholder="e.g. Cook, Waiter, Receptionist"'), 'span-2')}
+          ${field('Branch', `<select class="input" name="branch_id">${branchOptions(j.branch_id || '', () => true, 'Any branch')}</select>`)}
+          ${field('Job type', `<select class="input" name="job_type">${['Full-time', 'Part-time', 'Contract', 'Internship', 'Seasonal'].map((x) => `<option ${x === j.job_type ? 'selected' : ''}>${x}</option>`).join('')}</select>`)}
+          ${field('Salary (optional)', inp('salary', j.salary, 'maxlength="80" placeholder="e.g. Rs. 20,000 – 25,000 / month"'))}
+          ${field('Apply by (optional)', `<input class="input" type="date" name="deadline" value="${esc(j.deadline || '')}">`)}
+          ${field('About the job', `<textarea class="input" name="description" rows="4" maxlength="3000">${esc(j.description || '')}</textarea>`, 'span-2')}
+          ${field('Requirements', `<textarea class="input" name="requirements" rows="4" maxlength="3000" placeholder="One per line">${esc(j.requirements || '')}</textarea>`, 'span-2')}
+          ${field('Display order', inp('sort_order', j.sort_order ?? 0, 'type="number" min="0"'))}
+          <label class="check"><input type="checkbox" name="active" ${j.active ? 'checked' : ''}> Show on the Careers page</label>
+        </div>`,
+        onSubmit: async (fd) => {
+          await api(j.id ? `/jobs/${j.id}` : '/jobs', { method: j.id ? 'PUT' : 'POST', body: { ...fd, active: !!fd.active, sort_order: Number(fd.sort_order) } });
+          toast('Job saved', 'ok');
+          location.hash = 'careers?tab=jobs';
+          views.careers.render(el, new URLSearchParams({ tab: 'jobs' }));
+        },
+      });
+      $('#addJob').onclick = () => jobForm();
+      const downloadCv = async (a) => {
+        const res = await fetch(`/api/admin/applications/${a.id}/cv`, { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) return toast('Could not download the CV', 'err');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(await res.blob());
+        link.download = `CV-${a.name.replace(/[^\w-]+/g, '-')}.${a.cv_type || 'pdf'}`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+      };
+      body.onchange = async (e) => {
+        if (!e.target.matches('[data-app-status]')) return;
+        const id = Number(e.target.closest('tr').dataset.id);
+        try { await api(`/applications/${id}`, { method: 'PATCH', body: { status: e.target.value } }); apps.find((a) => a.id === id).status = e.target.value; toast('Saved', 'ok'); refreshCounts(); } catch (x) { toast(x.message, 'err'); }
+      };
+      body.onclick = async (e) => {
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr) return;
+        const id = Number(tr.dataset.id);
+        const j = jobs.find((x) => x.id === id), a = apps.find((x) => x.id === id);
+        if (e.target.matches('[data-edit-job]')) jobForm(j);
+        if (e.target.matches('[data-del-job]') && confirm(`Delete the job "${j.title}"? Applications already received are kept.`)) {
+          try { await api(`/jobs/${id}`, { method: 'DELETE' }); toast('Job deleted', 'ok'); views.careers.render(el, params); } catch (x) { toast(x.message, 'err'); }
+        }
+        if (e.target.matches('[data-cv]')) downloadCv(a);
+        if (e.target.matches('[data-view-app]')) {
+          openModal({
+            title: `${a.name} — ${a.position}`,
+            body: `<div class="summary"><dl><dt>Phone</dt><dd><a href="${telHref(a.phone)}">${esc(a.phone)}</a></dd>
+                ${a.email ? `<dt>Email</dt><dd><a href="mailto:${esc(a.email)}">${esc(a.email)}</a></dd>` : ''}
+                <dt>Position</dt><dd>${esc(a.position)}</dd>${a.experience ? `<dt>Experience</dt><dd>${esc(a.experience)}</dd>` : ''}
+                <dt>Received</dt><dd>${esc(a.created_at)} UTC</dd></dl></div>
+              ${a.message ? `<p style="white-space:pre-wrap">${esc(a.message)}</p>` : ''}
+              ${a.has_cv ? `<p><button type="button" class="btn btn-ghost btn-sm" id="cvBtn">${icon('print', 16)} Download CV</button></p>` : '<p class="muted">No CV attached.</p>'}
+              <div class="grid-2">${field('Status', statusSelect(a.status, APP_STATUSES, 'name="status"'))}
+              ${field('Staff note (private)', `<textarea class="input" name="admin_note" maxlength="1000">${esc(a.admin_note)}</textarea>`, 'span-2')}</div>`,
+            extraFoot: '<button type="button" class="btn btn-ghost" id="delApp" style="margin-right:auto">Delete</button>',
+            onSubmit: async (fd) => { await api(`/applications/${a.id}`, { method: 'PATCH', body: fd }); toast('Saved', 'ok'); refreshCounts(); views.careers.render(el, params); },
+          });
+          if ($('#cvBtn')) $('#cvBtn').onclick = () => downloadCv(a);
+          $('#delApp').onclick = async () => {
+            if (!confirm('Delete this application permanently?')) return;
+            await api(`/applications/${a.id}`, { method: 'DELETE' });
+            closeModal();
+            toast('Application deleted', 'ok');
+            refreshCounts();
+            views.careers.render(el, params);
+          };
+        }
       };
     },
   };
@@ -677,9 +860,9 @@
   // ---------------- Navigation ----------------
   const NAV = [
     ['dashboard', 'Dashboard', 'spark'], ['bookings', 'Room bookings', 'bed'], ['reservations', 'Table reservations', 'dish'],
-    ['availability', 'Availability', 'calendar'], ['messages', 'Messages', 'mail'], ['rooms', 'Rooms & photos', 'image'],
-    ['offers', 'Offers', 'tag'], ['menu', 'Menu', 'star'], ['website', 'Website content', 'globe'],
-    ['branches', 'Branches', 'pin'], ['settings', 'Settings & email', 'shield'],
+    ['availability', 'Availability', 'calendar'], ['messages', 'Messages', 'mail'], ['rooms', 'Rooms & photos', 'users'],
+    ['offers', 'Offers', 'tag'], ['menu', 'Menu', 'star'], ['gallery', 'Gallery', 'image'], ['careers', 'Careers', 'briefcase'],
+    ['website', 'Website content', 'globe'], ['branches', 'Branches', 'pin'], ['settings', 'Settings & email', 'shield'],
   ];
   function drawNav() {
     const cur = (location.hash.slice(1).split('?')[0]) || 'dashboard';
@@ -688,7 +871,7 @@
   async function refreshCounts() {
     try {
       const s = await api('/stats');
-      counts = { bookings: s.pending_bookings, reservations: s.pending_reservations, messages: s.unread_messages };
+      counts = { bookings: s.pending_bookings, reservations: s.pending_reservations, messages: s.unread_messages, careers: s.new_applications };
       drawNav();
     } catch { /* ignore */ }
   }

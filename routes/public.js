@@ -1,9 +1,12 @@
 'use strict';
+const crypto = require('crypto');
 const express = require('express');
 const { all, get, run, tx, getSettings } = require('../db');
 const U = require('../lib/util');
 const B = require('../lib/booking');
 const mail = require('../lib/mailer');
+const storage = require('../lib/storage');
+const { siteContent } = require('../lib/content');
 
 const router = express.Router();
 const submitLimit = U.rateLimit({ max: 15, windowMs: 10 * 60 * 1000 });
@@ -19,11 +22,62 @@ const OFFERS_SQL = `SELECT o.*, b.name AS branch_name, b.location AS branch_loca
   LEFT JOIN branches b ON b.id = o.branch_id
   WHERE o.active = 1 AND (o.valid_until = '' OR o.valid_until >= ?)`;
 
-// Website text and images that staff can change in Admin → Website. Never exposes email settings.
-const SITE_KEYS = ['announcement', 'hero_title', 'hero_highlight', 'hero_text', 'hero_image', 'about_text'];
+// Website text, images and switches from Admin → Website content (see lib/content.js). Never exposes email settings.
 router.get('/site', async (req, res) => {
-  const s = await getSettings();
-  res.json(Object.fromEntries(SITE_KEYS.map((k) => [k, s[k] || ''])));
+  res.json(siteContent(await getSettings()));
+});
+
+router.get('/gallery', async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 500, 500);
+  res.json(await all(`SELECT g.id, g.image_url, g.caption, g.category, g.branch_id, b.location AS branch_location
+    FROM gallery g LEFT JOIN branches b ON b.id = g.branch_id WHERE g.active = 1
+    ORDER BY g.sort_order, g.id DESC LIMIT ?`, limit));
+});
+
+// ---------------- Careers ----------------
+router.get('/jobs', async (req, res) => {
+  res.json(await all(`SELECT j.*, b.name AS branch_name, b.location AS branch_location FROM jobs j
+    LEFT JOIN branches b ON b.id = j.branch_id
+    WHERE j.active = 1 AND (j.deadline = '' OR j.deadline >= ?) ORDER BY j.sort_order, j.id DESC`, U.today()));
+});
+
+const CV_TYPES = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', jpg: 'image/jpeg', png: 'image/png' };
+function cvExt(buf) {
+  if (buf.toString('ascii', 0, 5) === '%PDF-') return 'pdf';
+  if (buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04) return 'docx';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  return null;
+}
+const applyLimit = U.rateLimit({ max: 5, windowMs: 60 * 60 * 1000 });
+// Larger body limit just for this route (the CV comes base64-encoded in the JSON).
+router.post('/careers/apply', applyLimit, express.json({ limit: '4.4mb' }), async (req, res) => {
+  const body = req.body || {};
+  const jobId = Number(body.job_id) || null;
+  const job = jobId ? await get("SELECT * FROM jobs WHERE id = ? AND active = 1 AND (deadline = '' OR deadline >= ?)", jobId, U.today()) : null;
+  if (jobId && !job) throw U.bad('This position is no longer open. Please choose another or send a general application.');
+  const name = U.str(body.name, { field: 'Full name', max: 100, required: true });
+  const phone = U.phone(body.phone);
+  const email = U.email(body.email);
+  if (!email) throw U.bad('Please enter your email address');
+  const position = job ? job.title : U.str(body.position, { field: 'Position', max: 100 }) || 'General application';
+  const experience = U.str(body.experience, { field: 'Experience', max: 200 });
+  const message = U.str(body.message, { field: 'Message', max: 3000 });
+
+  let cv_path = '', cv_type = '';
+  if (body.cv) {
+    const buf = Buffer.from(String(body.cv), 'base64');
+    if (buf.length > 3 * 1024 * 1024) throw U.bad('CV must be 3 MB or smaller');
+    const ext = cvExt(buf);
+    if (!ext) throw U.bad('CV must be a PDF, Word (.docx), JPG or PNG file');
+    cv_path = await storage.savePrivate(`cv-${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}.${ext}`, buf, CV_TYPES[ext]);
+    cv_type = ext;
+  }
+
+  const { rows: [app] } = await run(`INSERT INTO job_applications (job_id, position, name, phone, email, experience, message, cv_path, cv_type)
+    VALUES (?,?,?,?,?,?,?,?,?) RETURNING *`, job ? job.id : null, position, name, phone, email, experience, message, cv_path, cv_type);
+  await mail.sendAll(mail.notifyApplicant(app), mail.notifyStaffApplication(app));
+  res.status(201).json({ ok: true, position });
 });
 
 router.get('/offers', async (req, res) => {

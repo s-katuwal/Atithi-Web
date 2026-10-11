@@ -10,7 +10,9 @@ const PUBLIC = path.join(__dirname, 'public');
 
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.VERCEL ? true : 'loopback'); // real visitor IP for rate limiting
-app.use(express.json({ limit: '50kb' }));
+const smallJson = express.json({ limit: '50kb' });
+// Job applications carry a CV, so that route uses its own larger limit (routes/public.js).
+app.use((req, res, next) => (req.path === '/api/careers/apply' ? next() : smallJson(req, res, next)));
 app.use((req, res, next) => {
   res.set({
     'X-Content-Type-Options': 'nosniff',

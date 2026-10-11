@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { $, $$, esc, rs, icon, list, api, logoFor, roomArt, facilityIcon, fmtTime, telHref, waHref, offerCards } = window.Atithi;
+  const { $, $$, esc, rs, icon, list, api, getSite, lines, logoFor, roomArt, facilityIcon, fmtTime, telHref, waHref, offerCards } = window.Atithi;
 
   const id = location.pathname.split('/branches/')[1]?.replace(/\/$/, '') || new URLSearchParams(location.search).get('id') || '';
 
@@ -13,6 +13,7 @@
       $('#branchSide').hidden = true;
       return;
     }
+    const site = await getSite();
     const garden = !b.has_lodging;
     if (garden) document.body.classList.add('theme-garden');
     document.title = `${b.name} — ${b.location} | Atithi`;
@@ -67,10 +68,8 @@
       ${garden ? `<section class="branch-section">
         <h2 class="block-title">Parties &amp; celebrations</h2>
         <div class="grid-3">
-          ${[['party', 'Birthdays', 'Decorated garden tables, cake cutting and set menus for every age.'],
-             ['users', 'Family & reunions', 'Large tables for big families, with veg and non-veg options.'],
-             ['star', 'Office & groups', 'Team lunches and evening gatherings with sekuwa and drinks.']]
-            .map(([i, t, d]) => `<div class="card card-pad"><div style="color:var(--gold)">${icon(i, 28)}</div><h4 class="mt-2" style="color:var(--green)">${t}</h4><p class="muted mb-0" style="font-size:.9rem">${d}</p></div>`).join('')}
+          ${lines(site.party_items, 3)
+            .map(([i, t, d]) => `<div class="card card-pad"><div style="color:var(--gold)">${icon(i, 28)}</div><h4 class="mt-2" style="color:var(--green)">${esc(t)}</h4><p class="muted mb-0" style="font-size:.9rem">${esc(d)}</p></div>`).join('')}
         </div>
         <p class="mt-2"><a class="btn btn-accent" href="/book?type=table&branch=${b.id}&occasion=Birthday">Book a party or event</a></p>
       </section>` : ''}
@@ -129,6 +128,6 @@
         <a class="btn btn-primary btn-block" href="/book?type=table&branch=${b.id}">${icon('dish', 18)} Reserve a table</a>
         ${b.whatsapp ? `<a class="btn btn-ghost btn-block" target="_blank" rel="noopener" href="${waHref(b.whatsapp, `Namaste! I have a question about ${b.name}, ${b.location}.`)}">${icon('whatsapp', 18)} WhatsApp us</a>` : ''}
       </div>
-      <p class="pay-note">No advance payment needed. Pay at the branch by cash, eSewa, Khalti or Fonepay.</p>`;
+      <p class="pay-note">${esc(site.pay_note)}</p>`;
   });
 })();

@@ -52,7 +52,9 @@ There is no online payment step. Guests pay at the branch.
 - **Availability**: a 2-week grid per branch showing free rooms each night. Click a night to mark rooms as booked (phone or walk-in bookings, repairs), mark a room type fully booked for a date range, or mark it available again. The website stops offering marked rooms.
 - **Rooms & photos**: edit room types, prices and room counts, and **upload several photos** per room type (the first is the cover).
 - **Offers**: add promotions with a photo or poster, a badge (e.g. "20% OFF"), a branch and an end date. They show on the home page and branch page, and are hidden automatically after they expire.
-- **Website content**: change the announcement bar, the home page heading and intro text, the main picture and the "about" text.
+- **Website content**: change almost everything on the site without touching code. That includes the logo (also used in emails), the business name, colours, top bar and announcement, every home page heading and text, the "Why Atithi" boxes, booking steps and number badges, the footer, social media links, and switches to show or hide each section, the big hero picture (separately for computers and phones), and the Gallery and Careers menu links. All editable items are listed in `lib/content.js`; add a field there to make something new editable.
+- **Gallery**: upload photos (several at once), add captions, categories and branch. They appear on the Gallery page, which has filter buttons and a full-screen viewer, and the newest photos also show on the home page.
+- **Careers**: post job openings (branch, type, salary, deadline, description, requirements). Candidates apply on the Careers page with an optional CV (PDF, Word, JPG or PNG, up to 3 MB). CVs are stored privately, and only logged-in staff can download them from Admin → Careers. The applicant gets a confirmation email, and staff get an alert.
 - Edit the menu per branch: prices, veg/non-veg, "popular" items shown on the home page.
 - Edit branch details: address, phone, WhatsApp, email, map, opening hours, seating areas, facilities.
 

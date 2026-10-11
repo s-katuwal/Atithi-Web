@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { $, $$, esc, rs, icon, list, api, getBranches, getSite, logoFor, todayStr, addDays, fmtDate, telHref, toast, setBusy, offerCards } = window.Atithi;
+  const { $, $$, esc, rs, icon, api, getBranches, getSite, applyContent, lines, lightbox, logoFor, todayStr, addDays, telHref, toast, setBusy, offerCards } = window.Atithi;
 
   document.addEventListener('DOMContentLoaded', async () => {
     $$('[data-icon]').forEach((el) => el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon, 18)));
@@ -15,34 +15,37 @@
     });
     $('#qb-guests').innerHTML = Array.from({ length: 8 }, (_, i) => `<option value="${i + 1}" ${i === 1 ? 'selected' : ''}>${i + 1} guest${i ? 's' : ''}</option>`).join('');
 
-    // Features
-    const features = [
-      ['bed', 'Clean, cosy rooms', 'Fresh linen, attached bathrooms and hot water in every room.'],
-      ['dish', 'Home-style kitchen', 'Nepali khana, momo, sekuwa and snacks cooked fresh every day.'],
-      ['wifi', 'Free Wi-Fi', 'Stay connected for work or calls home throughout your stay.'],
-      ['car', 'Safe parking', 'Space for cars and bikes, with CCTV for peace of mind.'],
-      ['clock', '24-hour reception', 'Arrive late or leave early — someone is always here to help.'],
-      ['users', 'Family friendly', 'Family rooms, kids-friendly menu and space to relax together.'],
-      ['party', 'Parties & events', 'Birthdays, reunions and office gatherings at the Food Garden.'],
-      ['shield', 'Trusted & local', 'A family-run business serving guests since 2078 B.S.'],
-    ];
-    $('#features').innerHTML = features.map(([i, t, d]) =>
-      `<div class="card feature"><div class="ico">${icon(i, 26)}</div><h4>${t}</h4><p>${d}</p></div>`).join('');
-
-    // Content edited in Admin → Website (empty fields keep the default text)
-    getSite().then((s) => {
-      if (s.hero_title || s.hero_highlight) $('#heroTitle').innerHTML = `${esc(s.hero_title)} ${s.hero_highlight ? `<span>${esc(s.hero_highlight)}</span>` : ''}`;
-      if (s.hero_text) $('#heroText').textContent = s.hero_text;
-      if (s.about_text) $('#aboutText').textContent = s.about_text;
-      if (s.hero_image) { $('#heroLogo').classList.add('photo'); $('#heroLogo').innerHTML = `<img src="${esc(s.hero_image)}" alt="Atithi">`; }
-    });
+    // Text, lists, pictures and section switches from Admin → Website content
+    const site = await getSite();
+    applyContent(site);
+    $('#heroTitle').innerHTML = `${esc(site.hero_title)} ${site.hero_highlight ? `<span>${esc(site.hero_highlight)}</span>` : ''}`;
+    $('#heroBadges').innerHTML = lines(site.hero_badges, 2).map(([n, l]) => `<div><strong>${esc(n)}</strong><span>${esc(l)}</span></div>`).join('');
+    if (site.hero_image) { $('#heroLogo').classList.add('photo'); $('#heroLogo').innerHTML = `<img src="${esc(site.hero_image)}" alt="Atithi">`; }
+    $('#hero').classList.toggle('no-art', site.show_hero_image === '0');
+    $('#hero').classList.toggle('art-mobile', site.show_hero_image_mobile === '1');
+    $('#features').innerHTML = lines(site.features, 3).map(([i, t, d]) =>
+      `<div class="card feature"><div class="ico">${icon(i, 26)}</div><h4>${esc(t)}</h4><p>${esc(d)}</p></div>`).join('');
+    $('#steps').innerHTML = lines(site.steps, 2).map(([t, d]) => `<div class="card step"><h4>${esc(t)}</h4><p>${esc(d)}</p></div>`).join('');
 
     // Offers
-    api('/offers').then((offers) => {
-      if (!offers.length) return;
-      $('#offerGrid').innerHTML = offerCards(offers);
-      $('#offers').hidden = false;
-    }).catch(() => {});
+    if (site.show_offers !== '0') {
+      api('/offers').then((offers) => {
+        if (!offers.length) return;
+        $('#offerGrid').innerHTML = offerCards(offers);
+        $('#offers').hidden = false;
+      }).catch(() => {});
+    }
+
+    // Gallery preview
+    if (site.show_home_gallery !== '0') {
+      api('/gallery?limit=8').then((photos) => {
+        if (!photos.length) return;
+        $('#homeGalleryGrid').innerHTML = photos.map((p, i) => `<button type="button" class="gallery-item" data-i="${i}">
+          <img src="${esc(p.image_url)}" alt="${esc(p.caption || 'Atithi photo')}" loading="lazy"></button>`).join('');
+        $('#homeGalleryGrid').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) lightbox(photos, Number(b.dataset.i)); };
+        $('#homeGallery').hidden = false;
+      }).catch(() => {});
+    }
 
     // Branches
     const branches = await getBranches();

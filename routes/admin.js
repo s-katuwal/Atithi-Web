@@ -6,6 +6,7 @@ const U = require('../lib/util');
 const B = require('../lib/booking');
 const mail = require('../lib/mailer');
 const storage = require('../lib/storage');
+const content = require('../lib/content');
 
 const router = express.Router();
 const SESSION_MS = 12 * 60 * 60 * 1000;
@@ -55,6 +56,7 @@ router.post('/password', async (req, res) => {
 
 // ---------------- Dashboard ----------------
 router.get('/stats', async (req, res) => {
+  const newApplications = await get("SELECT COUNT(*) AS n FROM job_applications WHERE status = 'new'");
   const t = U.today();
   const n = async (sql, ...p) => Number((await get(sql, ...p)).n);
   const [occupancy, pending_bookings, pending_reservations, arrivals_today, departures_today, reservations_today,
@@ -80,7 +82,7 @@ router.get('/stats', async (req, res) => {
       WHERE x.date >= ? AND x.status IN ('pending','confirmed') ORDER BY x.date, x.time LIMIT 8`, t),
   ]);
   res.json({
-    today: t, pending_bookings, pending_reservations, arrivals_today, departures_today, reservations_today,
+    today: t, new_applications: newApplications.n, pending_bookings, pending_reservations, arrivals_today, departures_today, reservations_today,
     unread_messages, month_revenue, upcoming_bookings, upcoming_reservations,
     occupancy: occupancy.map(({ offline, ...o }) => ({ ...o, booked: Math.min(o.total, o.booked + offline) })),
   });
@@ -431,7 +433,6 @@ router.delete('/offers/:id', async (req, res) => {
 
 // ---------------- Website content & email settings ----------------
 const SETTING_FIELDS = {
-  announcement: 200, hero_title: 120, hero_highlight: 120, hero_text: 400, hero_image: 500, about_text: 1000,
   smtp_host: 120, smtp_port: 5, smtp_user: 120, mail_from: 120, mail_from_name: 80, notify_email: 300, site_url: 200,
 };
 router.get('/settings', async (req, res) => {
@@ -475,6 +476,131 @@ router.post('/settings/test-email', async (req, res) => {
   const r = await mail.send({ to, subject: 'Atithi — test email', html, text, kind: 'test' });
   if (!r.ok) throw U.bad('Could not send: ' + r.error);
   res.json({ ok: true });
+});
+
+// ---------------- Website content (lib/content.js) ----------------
+router.get('/content', async (req, res) => {
+  const saved = await getSettings();
+  res.json({ groups: content.GROUPS, values: Object.fromEntries(content.FIELDS.map((f) => [f.key, saved[f.key] ?? ''])) });
+});
+router.put('/content', async (req, res) => {
+  const x = req.body || {};
+  const out = {};
+  for (const [key, raw] of Object.entries(x)) {
+    const f = content.BY_KEY[key];
+    if (!f) continue;
+    let v = U.str(raw, { field: f.label, max: content.MAX[f.type] || 500 });
+    if (f.type === 'toggle') v = v === '0' ? '0' : '1';
+    if (f.type === 'color' && v && !/^#[0-9a-f]{6}$/i.test(v)) throw U.bad(`${f.label}: use a colour like #1774BC`);
+    if (f.type === 'url' && v && !/^https?:\/\//i.test(v)) throw U.bad(`${f.label}: the link must start with https://`);
+    if (f.type === 'image' && v && !/^(https?:\/\/|\/)/i.test(v)) throw U.bad(`${f.label}: please upload a picture`);
+    // Saving the default text is the same as leaving it empty, so later default changes still apply.
+    out[key] = v === f.default ? '' : v;
+  }
+  await saveSettings(out);
+  res.json({ ok: true });
+});
+
+// ---------------- Gallery ----------------
+async function galleryInput(body) {
+  return [
+    U.str(body.image_url, { field: 'Photo', max: 500, required: true }),
+    U.str(body.caption, { field: 'Caption', max: 200 }),
+    U.str(body.category, { field: 'Category', max: 40 }) || 'General',
+    body.branch_id ? (await B.getBranch(body.branch_id)).id : null,
+    body.active === false || body.active === 0 ? 0 : 1,
+    U.int(body.sort_order ?? 0, { field: 'Order', min: 0, max: 9999 }),
+  ];
+}
+router.get('/gallery', async (req, res) => {
+  res.json(await all(`SELECT g.*, b.location AS branch_location FROM gallery g LEFT JOIN branches b ON b.id = g.branch_id
+    ORDER BY g.sort_order, g.id DESC`));
+});
+router.post('/gallery', async (req, res) => {
+  const { rows } = await run('INSERT INTO gallery (image_url, caption, category, branch_id, active, sort_order) VALUES (?,?,?,?,?,?) RETURNING *',
+    ...await galleryInput(req.body || {}));
+  res.status(201).json(rows[0]);
+});
+router.put('/gallery/:id', async (req, res) => {
+  const { rows } = await run('UPDATE gallery SET image_url=?, caption=?, category=?, branch_id=?, active=?, sort_order=? WHERE id = ? RETURNING *',
+    ...await galleryInput(req.body || {}), Number(req.params.id));
+  if (!rows[0]) throw new U.HttpError(404, 'Photo not found');
+  res.json(rows[0]);
+});
+router.delete('/gallery/:id', async (req, res) => {
+  await run('DELETE FROM gallery WHERE id = ?', Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// ---------------- Careers: jobs & applications ----------------
+async function jobInput(body) {
+  const deadline = U.str(body.deadline, { field: 'Deadline', max: 10 });
+  if (deadline && !U.isDate(deadline)) throw U.bad('Please choose a valid deadline');
+  return [
+    U.str(body.title, { field: 'Job title', max: 100, required: true }),
+    body.branch_id ? (await B.getBranch(body.branch_id)).id : null,
+    U.str(body.job_type, { field: 'Job type', max: 40 }) || 'Full-time',
+    U.str(body.salary, { field: 'Salary', max: 80 }),
+    U.str(body.description, { field: 'Description', max: 3000 }),
+    U.str(body.requirements, { field: 'Requirements', max: 3000 }),
+    deadline,
+    body.active === false || body.active === 0 ? 0 : 1,
+    U.int(body.sort_order ?? 0, { field: 'Order', min: 0, max: 999 }),
+  ];
+}
+router.get('/jobs', async (req, res) => {
+  res.json(await all(`SELECT j.*, b.location AS branch_location,
+      (SELECT COUNT(*) FROM job_applications a WHERE a.job_id = j.id) AS applications
+    FROM jobs j LEFT JOIN branches b ON b.id = j.branch_id ORDER BY j.active DESC, j.sort_order, j.id DESC`));
+});
+router.post('/jobs', async (req, res) => {
+  const { rows } = await run(`INSERT INTO jobs (title, branch_id, job_type, salary, description, requirements, deadline, active, sort_order)
+    VALUES (?,?,?,?,?,?,?,?,?) RETURNING *`, ...await jobInput(req.body || {}));
+  res.status(201).json(rows[0]);
+});
+router.put('/jobs/:id', async (req, res) => {
+  const { rows } = await run(`UPDATE jobs SET title=?, branch_id=?, job_type=?, salary=?, description=?, requirements=?, deadline=?, active=?, sort_order=?
+    WHERE id = ? RETURNING *`, ...await jobInput(req.body || {}), Number(req.params.id));
+  if (!rows[0]) throw new U.HttpError(404, 'Job not found');
+  res.json(rows[0]);
+});
+router.delete('/jobs/:id', async (req, res) => {
+  await run('DELETE FROM jobs WHERE id = ?', Number(req.params.id)); // applications are kept (job_id becomes empty)
+  res.json({ ok: true });
+});
+
+const APPLICATION_STATUSES = ['new', 'reviewed', 'shortlisted', 'hired', 'rejected'];
+router.get('/applications', async (req, res) => {
+  const where = [], params = [];
+  if (req.query.status) { where.push('status = ?'); params.push(String(req.query.status)); }
+  res.json(await all(`SELECT id, job_id, position, name, phone, email, experience, message, cv_type, cv_path <> '' AS has_cv,
+      status, admin_note, created_at
+    FROM job_applications ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT 500`, ...params));
+});
+router.patch('/applications/:id', async (req, res) => {
+  const body = req.body || {};
+  const a = await get('SELECT * FROM job_applications WHERE id = ?', Number(req.params.id));
+  if (!a) throw new U.HttpError(404, 'Application not found');
+  const status = body.status != null ? U.oneOf(body.status, APPLICATION_STATUSES, 'status') : a.status;
+  const note = body.admin_note != null ? U.str(body.admin_note, { field: 'Note', max: 1000 }) : a.admin_note;
+  await run('UPDATE job_applications SET status = ?, admin_note = ? WHERE id = ?', status, note, a.id);
+  res.json({ ok: true, status, admin_note: note });
+});
+router.delete('/applications/:id', async (req, res) => {
+  await run('DELETE FROM job_applications WHERE id = ?', Number(req.params.id));
+  res.json({ ok: true });
+});
+// CVs are private: only logged-in staff can download them, through this route.
+const CV_MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', jpg: 'image/jpeg', png: 'image/png' };
+router.get('/applications/:id/cv', async (req, res) => {
+  const a = await get('SELECT * FROM job_applications WHERE id = ?', Number(req.params.id));
+  if (!a || !a.cv_path) throw new U.HttpError(404, 'No CV for this application');
+  let buf;
+  try { buf = await storage.readPrivate(a.cv_path); } catch { throw new U.HttpError(404, 'CV file not found'); }
+  const safeName = a.name.replace(/[^\w-]+/g, '-').slice(0, 40) || 'applicant';
+  res.set('Content-Type', CV_MIME[a.cv_type] || 'application/octet-stream');
+  res.attachment(`CV-${safeName}.${a.cv_type || 'bin'}`);
+  res.send(buf);
 });
 
 module.exports = router;

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Careers — Atithi</title>
+  <meta name="theme-color" content="#1774BC">
+  <link rel="icon" href="/images/favicon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Mukta:wght@500;600;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="careers">
+  <div id="site-header"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-wrap container">
+      <div class="inner">
+        <img class="logo" src="/images/logo-atithi.jpg" data-c-src="site_logo" alt="Atithi logo">
+        <div style="flex:1">
+          <div class="eyebrow left">Careers</div>
+          <h1 data-c="careers_title">Work with us</h1>
+          <p data-c="careers_text">Join the Atithi family. We are always looking for friendly, hard-working people for our kitchens, restaurants and lodges.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main class="section">
+    <div class="container" style="max-width:900px">
+      <h2 class="block-title">Open positions</h2>
+      <div id="jobs"><div class="skeleton" style="height:140px"></div></div>
+
+      <h2 class="block-title mt-3" id="apply">Apply now</h2>
+      <form class="card card-pad" id="applyForm" novalidate>
+        <div class="grid-2">
+          <div class="field span-2"><label for="a-job">Position *</label><select class="input" id="a-job" name="job_id"></select></div>
+          <div class="field span-2" id="a-position-wrap" hidden><label for="a-position">Which job are you interested in?</label><input class="input" id="a-position" name="position" maxlength="100" placeholder="e.g. Cook, Waiter, Receptionist"></div>
+          <div class="field"><label for="a-name">Full name *</label><input class="input" id="a-name" name="name" required maxlength="100" autocomplete="name"></div>
+          <div class="field"><label for="a-phone">Mobile number *</label><input class="input" id="a-phone" name="phone" type="tel" required maxlength="20" autocomplete="tel" placeholder="98XXXXXXXX"></div>
+          <div class="field"><label for="a-email">Email *</label><input class="input" id="a-email" name="email" type="email" required maxlength="120" autocomplete="email"></div>
+          <div class="field"><label for="a-exp">Experience</label><input class="input" id="a-exp" name="experience" maxlength="200" placeholder="e.g. 2 years as a cook"></div>
+          <div class="field span-2"><label for="a-msg">About you (optional)</label><textarea class="input" id="a-msg" name="message" maxlength="3000" placeholder="Tell us a little about yourself and why you would like to join."></textarea></div>
+          <div class="field span-2"><label for="a-cv">CV / resume (optional)</label><input class="input" id="a-cv" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"><span class="hint">PDF, Word (.docx), JPG or PNG · up to 3 MB. Only our hiring team can see it.</span></div>
+        </div>
+        <div id="a-err" class="form-error mt-2" hidden></div>
+        <div id="a-ok" class="form-ok mt-2" hidden></div>
+        <button class="btn btn-accent mt-3" type="submit" id="a-submit">Send application</button>
+      </form>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/careers.js"></script>
+</body>
+</html>

@@ -41,6 +41,11 @@
     party: '<path d="M4 20 9 6l9 9z"/><path d="M14 4v2M18 6l-1.5 1.5M20 10h-2"/>',
     water: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
     print: '<path d="M6 9V3h12v6M6 18H4v-7h16v7h-2"/><rect x="6" y="14" width="12" height="7"/>',
+    facebook: '<path d="M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v7h4v-7h3l1-4h-4V8z"/>',
+    instagram: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
+    tiktok: '<path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5M14 3c.5 3 2.5 5 5.5 5"/>',
+    youtube: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9 5 3-5 3z"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
     image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
     tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 3.5 6 3.5 9s-1 6-3.5 9c-2.5-3-3.5-6-3.5-9s1-6 3.5-9z"/>',
@@ -114,6 +119,23 @@
   const getBranches = () => (branchPromise ||= api('/branches').catch(() => BRANCHES));
   const getSite = () => (sitePromise ||= api('/site').catch(() => ({})));
 
+  // ---------- Content from Admin → Website content ----------
+  /** One item per line, parts separated by " | ". */
+  const lines = (v, parts) => String(v || '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .map((l) => { const p = l.split('|').map((x) => x.trim()); while (p.length < parts) p.push(''); return p; });
+  /** Fill in [data-c] text, [data-c-src] images and hide [data-show="key"] sections switched off. */
+  function applyContent(site, root = document) {
+    $$('[data-c]', root).forEach((el) => { const v = site[el.dataset.c]; if (v != null && v !== '') el.textContent = v; });
+    $$('[data-c-src]', root).forEach((el) => { const v = site[el.dataset.cSrc]; if (v) el.src = v; });
+    $$('[data-show]', root).forEach((el) => { if (site[el.dataset.show] === '0') el.hidden = true; });
+  }
+  function applyTheme(site) {
+    const r = document.documentElement.style;
+    if (site.color_primary && site.color_primary.toLowerCase() !== '#1774bc') { r.setProperty('--blue', site.color_primary); r.setProperty('--blue-700', site.color_primary); }
+    if (site.color_accent && site.color_accent.toLowerCase() !== '#f5a11c') { r.setProperty('--saffron', site.color_accent); r.setProperty('--saffron-600', site.color_accent); }
+  }
+  const SOCIAL = [['social_facebook', 'facebook', 'Facebook'], ['social_instagram', 'instagram', 'Instagram'], ['social_tiktok', 'tiktok', 'TikTok'], ['social_youtube', 'youtube', 'YouTube']];
+
   function toast(msg, type = '') {
     let wrap = $('.toast-wrap');
     if (!wrap) { wrap = document.createElement('div'); wrap.className = 'toast-wrap'; wrap.setAttribute('role', 'status'); document.body.appendChild(wrap); }
@@ -180,13 +202,13 @@
       <span><strong>${esc(b.name)}</strong><small>${esc(b.location)} · ${b.has_lodging ? 'Lodging & Dining' : 'Dining & Events'}</small></span></a>`;
     el.innerHTML = `
       <div class="topbar"><div class="container">
-        <span><span class="motto" lang="ne">अतिथि देवो भवः</span> <span class="hide-sm">— A guest is like God</span></span>
-        <span class="hide-sm">Laxmipur · Birtamode · Food Garden</span>
+        <span><span class="motto" lang="ne" data-c="topbar_motto">अतिथि देवो भवः</span> <span class="hide-sm" data-c="topbar_motto_en">— A guest is like God</span></span>
+        <span class="hide-sm" data-c="topbar_middle">Laxmipur · Birtamode · Food Garden</span>
         <a href="/track">Manage my booking</a>
       </div></div>
       <header class="site-header"><div class="container nav">
-        <a class="brand" href="/"><img src="${LOGOS.lodge}" alt="Atithi logo">
-          <span><strong>Atithi</strong><small>Restro · Lodge · Food Garden</small></span></a>
+        <a class="brand" href="/"><img src="${LOGOS.lodge}" data-c-src="site_logo" alt="Atithi logo">
+          <span><strong data-c="site_name">Atithi</strong><small data-c="site_tagline">Restro · Lodge · Food Garden</small></span></a>
         <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">${icon('menu', 28)}</button>
         <nav class="nav-links" aria-label="Main">
           <a href="/" class="${active === 'home' ? 'active' : ''}">Home</a>
@@ -196,8 +218,10 @@
           </div>
           <a href="/book?type=room" class="${active === 'room' ? 'active' : ''}">Book a Stay</a>
           <a href="/book?type=table" class="${active === 'table' ? 'active' : ''}">Reserve a Table</a>
+          <a href="/gallery" class="${active === 'gallery' ? 'active' : ''}" data-show="show_gallery">Gallery</a>
+          <a href="/careers" class="${active === 'careers' ? 'active' : ''}" data-show="show_careers">Careers</a>
           <a href="/#contact">Contact</a>
-          <a href="/book" class="btn btn-accent">${icon('calendar', 18)} Book Now</a>
+          <a href="/book" class="btn btn-accent">${icon('calendar', 18)} <span data-c="book_btn">Book Now</span></a>
         </nav>
       </div></header>`;
     const toggle = $('.nav-toggle', el), links = $('.nav-links', el);
@@ -209,6 +233,8 @@
     links.addEventListener('click', (e) => { if (e.target.closest('a')) { links.classList.remove('open'); toggle.innerHTML = icon('menu', 28); } });
     getBranches().then((bs) => { $('#nav-branches').innerHTML = bs.map(item).join(''); });
     getSite().then((s) => {
+      applyTheme(s);
+      applyContent(s, el);
       if (s.announcement) el.insertAdjacentHTML('afterbegin', `<div class="announce">${icon('tag', 16)} ${esc(s.announcement)}</div>`);
     });
   }
@@ -223,27 +249,31 @@
         ${b.phone ? `<li><a href="${telHref(b.phone)}">${esc(b.phone)}</a></li>` : ''}
         ${b.email ? `<li><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></li>` : ''}
         <li><a href="/branches/${b.id}">View branch →</a></li></ul></div>`;
-    const draw = (bs) => {
+    const draw = (bs, site = {}) => {
+      const social = SOCIAL.filter(([k]) => site[k]).map(([k, ic, label]) =>
+        `<a href="${esc(site[k])}" target="_blank" rel="noopener" aria-label="${label}">${icon(ic, 20)}</a>`).join('');
       el.innerHTML = `<footer class="site-footer">
         <div class="container footer-grid">
           <div class="footer-brand">
-            <img src="${LOGOS.lodge}" alt="Atithi logo">
-            <div class="ne" lang="ne">अतिथि देवो भवः</div>
-            <p>A guest is like God. Since 2078 B.S. we have welcomed every guest with warm rooms, honest food and heartfelt Nepali hospitality.</p>
+            <img src="${LOGOS.lodge}" data-c-src="site_logo" alt="Atithi logo">
+            <div class="ne" lang="ne" data-c="topbar_motto">अतिथि देवो भवः</div>
+            <p data-c="footer_about">A guest is like God. Since 2078 B.S. we have welcomed every guest with warm rooms, honest food and heartfelt Nepali hospitality.</p>
+            ${social ? `<div class="social">${social}</div>` : ''}
             <a class="btn btn-accent btn-sm" href="/book">Book online</a>
           </div>
           ${bs.map(col).join('')}
         </div>
         <div class="container footer-bottom">
-          <span>© ${year} Atithi Restro & Lodge · Atithi Food Garden. All rights reserved.</span>
-          <span><a href="/track">Manage booking</a> · <a href="/admin">Staff login</a></span>
+          <span>© ${year} <span data-c="footer_copyright">Atithi Restro & Lodge · Atithi Food Garden</span>. All rights reserved.</span>
+          <span><a href="/track">Manage booking</a> · <a href="/gallery" data-show="show_gallery">Gallery</a> · <a href="/careers" data-show="show_careers">Careers</a> · <a href="/admin">Staff login</a></span>
         </div>
         <div class="footer-stripe"></div>
       </footer>`;
+      applyContent(site, el);
     };
     draw(BRANCHES);
-    getBranches().then((bs) => {
-      draw(bs);
+    Promise.all([getBranches(), getSite()]).then(([bs, site]) => {
+      draw(bs, site);
       const wa = bs.find((b) => b.whatsapp);
       if (wa && !$('.wa-float')) {
         document.body.insertAdjacentHTML('beforeend',
@@ -252,13 +282,41 @@
     });
   }
 
+  /** Full-screen photo viewer used by the gallery. */
+  function lightbox(items, start) {
+    let i = start;
+    const box = document.createElement('div');
+    box.className = 'lightbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Photo viewer');
+    const draw = () => {
+      const it = items[i];
+      box.innerHTML = `<button class="lb-close" aria-label="Close">${icon('close', 28)}</button>
+        ${items.length > 1 ? `<button class="lb-prev" aria-label="Previous photo">‹</button><button class="lb-next" aria-label="Next photo">›</button>` : ''}
+        <figure><img src="${esc(it.image_url)}" alt="${esc(it.caption || 'Photo')}">
+        ${it.caption || it.branch_location ? `<figcaption>${esc(it.caption)}${it.branch_location ? ` <small>${esc(it.branch_location)}</small>` : ''}</figcaption>` : ''}</figure>`;
+    };
+    const close = () => { box.remove(); document.removeEventListener('keydown', key); };
+    const go = (d) => { i = (i + d + items.length) % items.length; draw(); };
+    const key = (e) => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); };
+    box.addEventListener('click', (e) => {
+      if (e.target.closest('.lb-prev')) return go(-1);
+      if (e.target.closest('.lb-next')) return go(1);
+      if (e.target.closest('.lb-close') || e.target === box) close();
+    });
+    document.addEventListener('keydown', key);
+    draw();
+    document.body.appendChild(box);
+  }
+
   window.Atithi = {
     LOGOS, BRANCHES, logoFor, icon, facilityIcon, esc, rs, $, $$, list, todayStr, addDays, fmtDate, fmtTime,
-    api, getBranches, getSite, offerCards, toast, setBusy, telHref, waHref, roomArt, renderHeader, renderFooter,
+    api, getBranches, getSite, applyContent, lines, lightbox, offerCards, toast, setBusy, telHref, waHref, roomArt, renderHeader, renderFooter,
   };
 
   document.addEventListener('DOMContentLoaded', () => {
     renderHeader(document.body.dataset.page);
     renderFooter();
+    getSite().then((site) => applyContent(site)); // any [data-c] on the page itself
   });
 })();

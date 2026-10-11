@@ -4,6 +4,7 @@
   const { $, $$, esc, rs, icon, list, api, getBranches, logoFor, roomArt, todayStr, addDays, fmtDate, fmtTime, telHref, toast, setBusy } = A;
 
   const qs = new URLSearchParams(location.search);
+  let payNote = 'No advance payment. Pay at the hotel by cash, eSewa, Khalti or Fonepay. Cancel free online before your check-in date.';
   const state = {
     mode: qs.get('type') === 'table' ? 'table' : 'room',
     branches: [],
@@ -262,7 +263,7 @@
         </dl>
         <div class="total"><span>Total</span><strong>${r ? rs(r.price * s.nights * rooms) : '—'}</strong></div>
         ${b ? `<p class="muted mt-2 mb-0" style="font-size:.82rem">Check-in from ${fmtTime(b.checkin_time)} · Check-out by ${fmtTime(b.checkout_time)}</p>` : ''}
-        <p class="pay-note">${icon('shield', 16)} No advance payment. Pay at the hotel by cash, eSewa, Khalti or Fonepay. Cancel free online before your check-in date.</p>`;
+        <p class="pay-note">${icon('shield', 16)} ${esc(payNote)}</p>`;
     } else {
       const b = branchById($('#t-branch').value);
       el.innerHTML = `<h3>Your reservation</h3>
@@ -319,6 +320,7 @@
 
   // ---------------- Init ----------------
   document.addEventListener('DOMContentLoaded', async () => {
+    A.getSite().then((s) => { if (s.pay_note) { payNote = s.pay_note; renderSummary(); } });
     $('#tab-room').innerHTML = `${icon('bed', 18)} Room stay`;
     $('#tab-table').innerHTML = `${icon('dish', 18)} Table / event`;
     $$('.book-tabs button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));

@@ -131,3 +131,32 @@ table.av-table th.today { color: var(--blue-900); background: #E8F1FA; }
 .email-log li.ok { color: var(--ok); } .email-log li.fail { color: var(--err); }
 .email-log small { color: var(--muted); display: block; margin-left: 16px; }
 .mt-1 { margin-top: 8px; }
+
+/* Website content editor */
+.content-group { padding: 0; margin-bottom: 14px; overflow: hidden; }
+.content-group > summary { cursor: pointer; padding: 16px 20px; font-weight: 600; color: var(--blue-900); font-size: 1.05rem; list-style: none; display: flex; justify-content: space-between; }
+.content-group > summary::after { content: '▾'; color: var(--muted); }
+.content-group[open] > summary::after { content: '▴'; }
+.content-group[open] > summary { border-bottom: 1px solid var(--line); }
+.content-group > .grid-2 { padding: 18px 20px 20px; }
+.content-group label { display: flex; align-items: center; gap: 6px; }
+.reset-btn { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: .95rem; padding: 0 4px; }
+.reset-btn:hover { color: var(--blue); }
+.input.mono { font-family: ui-monospace, Menlo, monospace; font-size: .82rem; line-height: 1.5; }
+.color-row { display: flex; gap: 8px; align-items: center; }
+.color-row input[type=color] { width: 46px; height: 42px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+.save-bar { position: sticky; bottom: 0; background: var(--bg-soft); padding: 14px 0; display: flex; gap: 14px; align-items: center; border-top: 1px solid var(--line); z-index: 5; }
+
+/* Gallery admin */
+.gal-admin { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.gal-card { overflow: hidden; }
+.gal-card.inactive { opacity: .5; }
+.gal-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; cursor: pointer; display: block; }
+.gal-body { padding: 10px 12px 12px; font-size: .88rem; }
+.gal-body small { display: block; color: var(--muted); }
+
+/* Tabs made of links */
+.admin-tabs { margin-bottom: 16px; }
+.admin-tabs a { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-weight: 500; font-size: .9rem; }
+.admin-tabs a.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+.admin-tabs { justify-content: flex-start; }

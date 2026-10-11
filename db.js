@@ -63,7 +63,7 @@ function verifyPassword(password, salt, hash) {
 
 // ---------------- Schema ----------------
 const TABLES = ['branches', 'room_types', 'menu_items', 'bookings', 'reservations', 'messages', 'admins', 'sessions',
-  'room_blocks', 'offers', 'settings', 'email_log'];
+  'room_blocks', 'offers', 'settings', 'email_log', 'gallery', 'jobs', 'job_applications'];
 const SCHEMA = `
 CREATE OR REPLACE FUNCTION now_text() RETURNS text LANGUAGE sql STABLE
   AS $$ SELECT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') $$;
@@ -226,6 +226,47 @@ CREATE TABLE IF NOT EXISTS email_log (
   created_at TEXT NOT NULL DEFAULT now_text()
 );
 CREATE INDEX IF NOT EXISTS idx_email_log_ref ON email_log(ref);
+
+CREATE TABLE IF NOT EXISTS gallery (
+  id         SERIAL PRIMARY KEY,
+  image_url  TEXT NOT NULL,
+  caption    TEXT NOT NULL DEFAULT '',
+  category   TEXT NOT NULL DEFAULT 'General',
+  branch_id  TEXT REFERENCES branches(id),
+  active     INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT now_text()
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+  id           SERIAL PRIMARY KEY,
+  title        TEXT NOT NULL,
+  branch_id    TEXT REFERENCES branches(id),
+  job_type     TEXT NOT NULL DEFAULT 'Full-time',
+  salary       TEXT NOT NULL DEFAULT '',
+  description  TEXT NOT NULL DEFAULT '',
+  requirements TEXT NOT NULL DEFAULT '',
+  deadline     TEXT NOT NULL DEFAULT '',
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL DEFAULT now_text()
+);
+
+CREATE TABLE IF NOT EXISTS job_applications (
+  id         SERIAL PRIMARY KEY,
+  job_id     INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+  position   TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  phone      TEXT NOT NULL,
+  email      TEXT NOT NULL DEFAULT '',
+  experience TEXT NOT NULL DEFAULT '',
+  message    TEXT NOT NULL DEFAULT '',
+  cv_path    TEXT NOT NULL DEFAULT '',
+  cv_type    TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'new',
+  admin_note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT now_text()
+);
 `
   // Supabase exposes the public schema through its Data API. Turning on row level security with no
   // policies blocks that API completely; this server connects directly as the owner, so it is unaffected.

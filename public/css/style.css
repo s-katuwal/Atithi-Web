@@ -107,10 +107,10 @@ p { margin: 0 0 1em; }
 .brand { display: flex; align-items: center; gap: 12px; color: var(--ink); }
 .brand img { width: 52px; height: 52px; border-radius: 50%; box-shadow: 0 0 0 3px var(--blue), 0 0 0 5px var(--saffron); }
 .brand strong { display: block; font-size: 1.2rem; color: var(--blue-900); letter-spacing: .02em; }
-.brand small { display: block; font-size: .72rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.brand small { display: block; white-space: nowrap; font-size: .72rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 .nav-links { display: flex; align-items: center; gap: 4px; }
 .nav-links > a, .nav-drop > button {
-  padding: 10px 14px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: .95rem;
+  padding: 10px 11px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: .95rem; white-space: nowrap;
   background: none; border: 0; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
 }
 .nav-links > a:hover, .nav-drop > button:hover, .nav-links > a.active { color: var(--blue); background: var(--blue-50); }
@@ -127,7 +127,8 @@ p { margin: 0 0 1em; }
 .nav-drop-menu small { display: block; color: var(--muted); font-size: .78rem; }
 .nav-toggle { display: none; background: none; border: 0; padding: 8px; cursor: pointer; color: var(--blue-900); }
 
-@media (max-width: 980px) {
+/* Switch to the menu button before the links run out of room */
+@media (max-width: 1200px) {
   .nav-toggle { display: block; }
   .nav-links {
     position: fixed; inset: 74px 0 auto 0; background: #fff; flex-direction: column; align-items: stretch;
@@ -138,8 +139,8 @@ p { margin: 0 0 1em; }
   .nav-drop-menu { position: static; display: block; box-shadow: none; border: 0; padding: 0 0 0 10px; }
   .nav-drop > button { display: none; }
   .nav-links .btn { margin: 10px 0 0; }
-  .topbar .hide-sm { display: none; }
 }
+@media (max-width: 980px) { .topbar .hide-sm { display: none; } }
 
 /* ---------- Hero (split saffron / blue like the logo) ---------- */
 .hero {
@@ -487,3 +488,61 @@ body.theme-garden .badge-pop { background: #F3E7C9; color: #6d4f12; }
 .room-thumbs button { flex: none; width: 52px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 6px; overflow: hidden; cursor: pointer; background: none; opacity: .7; }
 .room-thumbs button.active, .room-thumbs button:hover { border-color: var(--saffron); opacity: 1; }
 .room-thumbs img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Hero picture switches (Admin → Website content) */
+.hero.no-art .hero-logo { display: none; }
+.hero.no-art .container { grid-template-columns: 1fr; max-width: 820px; }
+@media (max-width: 900px) {
+  .hero:not(.art-mobile) .hero-logo { display: none; }
+  .hero:not(.art-mobile) { background: linear-gradient(180deg, var(--saffron) 0 120px, var(--blue) 120px 100%); }
+  .hero:not(.art-mobile) .container { padding-top: 28px; }
+}
+
+/* Keep every page inside the screen width on phones */
+html, body { max-width: 100%; overflow-x: hidden; }
+.hero-card, .hero-card h1, .hero-card p { min-width: 0; overflow-wrap: anywhere; }
+.hero .container > * { min-width: 0; }
+@media (max-width: 560px) {
+  .topbar .container { justify-content: space-between; }
+  .brand strong { font-size: 1.05rem; }
+  .brand small { font-size: .62rem; }
+  .brand img { width: 44px; height: 44px; }
+  .hero-actions .btn { flex: 1 1 100%; justify-content: center; }
+}
+
+/* Footer social links */
+.footer-brand .social { display: flex; gap: 10px; margin: 4px 0 14px; }
+.footer-brand .social a { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.1); color: #fff; }
+.footer-brand .social a:hover { background: var(--saffron); color: #1d1606; }
+
+/* Gallery */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.gallery-item { position: relative; padding: 0; border: 0; border-radius: var(--radius); overflow: hidden; cursor: zoom-in; aspect-ratio: 4 / 3; background: var(--bg-soft); }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+.gallery-item:hover img { transform: scale(1.05); }
+.gallery-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 10px; color: #fff; font-size: .85rem; text-align: left; background: linear-gradient(transparent, rgba(0,0,0,.65)); }
+@media (max-width: 560px) { .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } }
+.lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(5,12,20,.92); display: grid; place-items: center; padding: 50px 16px; }
+.lightbox figure { margin: 0; max-width: min(1100px, 100%); text-align: center; }
+.lightbox img { max-width: 100%; max-height: 80vh; border-radius: 10px; }
+.lightbox figcaption { color: #fff; margin-top: 10px; font-size: .95rem; }
+.lightbox figcaption small { color: #b9c6d3; margin-left: 6px; }
+.lightbox button { position: absolute; background: rgba(255,255,255,.12); color: #fff; border: 0; cursor: pointer; border-radius: 50%; width: 46px; height: 46px; display: grid; place-items: center; font-size: 2rem; line-height: 1; }
+.lightbox button:hover { background: rgba(255,255,255,.25); }
+.lb-close { top: 14px; right: 14px; }
+.lb-prev { left: 14px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 14px; top: 50%; transform: translateY(-50%); }
+
+/* Careers */
+.job-card { padding: 20px 22px; margin-bottom: 14px; }
+.job-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.job-head h3 { margin: 0 0 4px; color: var(--blue-900); font-size: 1.15rem; }
+.job-meta { font-size: .85rem; color: var(--muted); display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.job-text { margin-top: 10px; color: var(--ink); font-size: .93rem; }
+.job-text p { margin: 0 0 6px; }
+.job-req { margin-top: 8px; font-size: .9rem; }
+.job-req summary { cursor: pointer; color: var(--blue); font-weight: 600; }
+.job-req p { margin: 6px 0 0; }
+/* Date pickers and selects have a wide built-in minimum; let grid columns shrink on phones */
+.quick-book .field, .quick-book .input { min-width: 0; width: 100%; }
+@media (max-width: 900px) { .quick-book { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
