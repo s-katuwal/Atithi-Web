@@ -12,7 +12,8 @@
     "node": "24.x"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "nodemailer": "10.0.10"
+    "express": "5.2.1",
+    "nodemailer": "10.0.10",
+    "pg": "8.23.0"
   }
 }

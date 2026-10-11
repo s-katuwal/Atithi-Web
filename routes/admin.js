@@ -1,86 +1,88 @@
 'use strict';
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
-const { DATA_DIR, all, get, run, tx, hashPassword, verifyPassword, getSettings, saveSettings } = require('../db');
+const { all, get, run, tx, hashPassword, verifyPassword, getSettings, saveSettings } = require('../db');
 const U = require('../lib/util');
 const B = require('../lib/booking');
 const mail = require('../lib/mailer');
+const storage = require('../lib/storage');
 
 const router = express.Router();
 const SESSION_MS = 12 * 60 * 60 * 1000;
 
 // ---------------- Auth ----------------
-router.post('/login', U.rateLimit({ max: 10, windowMs: 15 * 60 * 1000 }), (req, res) => {
+router.post('/login', U.rateLimit({ max: 10, windowMs: 15 * 60 * 1000 }), async (req, res) => {
   const username = U.str(req.body?.username, { field: 'Username', max: 50, required: true });
   const password = U.str(req.body?.password, { field: 'Password', max: 200, required: true });
-  const admin = get('SELECT * FROM admins WHERE username = ?', username);
+  const admin = await get('SELECT * FROM admins WHERE username = ?', username);
   if (!admin || !verifyPassword(password, admin.salt, admin.password_hash)) {
     throw new U.HttpError(401, 'Incorrect username or password');
   }
   const token = crypto.randomBytes(32).toString('hex');
-  run('INSERT INTO sessions (token, admin_id, expires_at) VALUES (?,?,?)', token, admin.id, Date.now() + SESSION_MS);
+  await run('INSERT INTO sessions (token, admin_id, expires_at) VALUES (?,?,?)', token, admin.id, Date.now() + SESSION_MS);
   res.json({ token, username: admin.username });
 });
 
-router.use((req, res, next) => {
+router.use(async (req, res, next) => {
   const token = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  const s = token && get(`SELECT s.*, a.username FROM sessions s JOIN admins a ON a.id = s.admin_id
+  const s = token && await get(`SELECT s.*, a.username FROM sessions s JOIN admins a ON a.id = s.admin_id
     WHERE s.token = ? AND s.expires_at > ?`, token, Date.now());
   if (!s) return res.status(401).json({ error: 'Please log in again' });
   req.admin = { id: s.admin_id, username: s.username, token };
   next();
 });
 
-router.post('/logout', (req, res) => {
-  run('DELETE FROM sessions WHERE token = ?', req.admin.token);
+router.post('/logout', async (req, res) => {
+  await run('DELETE FROM sessions WHERE token = ?', req.admin.token);
   res.json({ ok: true });
 });
 
 router.get('/me', (req, res) => res.json({ username: req.admin.username }));
 
-router.post('/password', (req, res) => {
+router.post('/password', async (req, res) => {
   const current = U.str(req.body?.current, { field: 'Current password', max: 200, required: true });
   const next = U.str(req.body?.next, { field: 'New password', max: 200, required: true });
   if (next.length < 8) throw U.bad('New password must be at least 8 characters');
-  const admin = get('SELECT * FROM admins WHERE id = ?', req.admin.id);
+  const admin = await get('SELECT * FROM admins WHERE id = ?', req.admin.id);
   if (!verifyPassword(current, admin.salt, admin.password_hash)) throw U.bad('Current password is incorrect');
   const { salt, hash } = hashPassword(next);
-  tx(() => {
-    run('UPDATE admins SET password_hash = ?, salt = ? WHERE id = ?', hash, salt, admin.id);
-    run('DELETE FROM sessions WHERE admin_id = ? AND token <> ?', admin.id, req.admin.token);
+  await tx(async () => {
+    await run('UPDATE admins SET password_hash = ?, salt = ? WHERE id = ?', hash, salt, admin.id);
+    await run('DELETE FROM sessions WHERE admin_id = ? AND token <> ?', admin.id, req.admin.token);
   });
   res.json({ ok: true });
 });
 
 // ---------------- Dashboard ----------------
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   const t = U.today();
-  const n = (sql, ...p) => Number(get(sql, ...p).n);
-  const occupancy = all('SELECT id, name, location FROM branches WHERE has_lodging = 1 ORDER BY sort_order').map((b) => {
-    const total = n('SELECT COALESCE(SUM(total_rooms),0) AS n FROM room_types WHERE branch_id = ? AND active = 1', b.id);
-    const booked = n(`SELECT COALESCE(SUM(rooms),0) AS n FROM bookings WHERE branch_id = ?
-      AND status IN ('confirmed','checked_in') AND check_in <= ? AND check_out > ?`, b.id, t, t);
-    const offline = n(`SELECT COALESCE(SUM(k.rooms),0) AS n FROM room_blocks k JOIN room_types r ON r.id = k.room_type_id
-      WHERE r.branch_id = ? AND r.active = 1 AND k.date = ?`, b.id, t);
-    return { ...b, total, booked: Math.min(total, booked + offline) };
-  });
-  res.json({
-    today: t,
-    pending_bookings: n("SELECT COUNT(*) AS n FROM bookings WHERE status = 'pending'"),
-    pending_reservations: n("SELECT COUNT(*) AS n FROM reservations WHERE status = 'pending'"),
-    arrivals_today: n("SELECT COUNT(*) AS n FROM bookings WHERE check_in = ? AND status IN ('pending','confirmed')", t),
-    departures_today: n("SELECT COUNT(*) AS n FROM bookings WHERE check_out = ? AND status = 'checked_in'", t),
-    reservations_today: n("SELECT COUNT(*) AS n FROM reservations WHERE date = ? AND status IN ('pending','confirmed','seated')", t),
-    unread_messages: n('SELECT COUNT(*) AS n FROM messages WHERE is_read = 0'),
-    month_revenue: n(`SELECT COALESCE(SUM(total),0) AS n FROM bookings
+  const n = async (sql, ...p) => Number((await get(sql, ...p)).n);
+  const [occupancy, pending_bookings, pending_reservations, arrivals_today, departures_today, reservations_today,
+    unread_messages, month_revenue, upcoming_bookings, upcoming_reservations] = await Promise.all([
+    all(`SELECT b.id, b.name, b.location,
+        (SELECT COALESCE(SUM(total_rooms),0) FROM room_types WHERE branch_id = b.id AND active = 1) AS total,
+        (SELECT COALESCE(SUM(rooms),0) FROM bookings WHERE branch_id = b.id AND status IN ('confirmed','checked_in')
+          AND check_in <= ? AND check_out > ?) AS booked,
+        (SELECT COALESCE(SUM(k.rooms),0) FROM room_blocks k JOIN room_types r ON r.id = k.room_type_id
+          WHERE r.branch_id = b.id AND r.active = 1 AND k.date = ?) AS offline
+      FROM branches b WHERE b.has_lodging = 1 ORDER BY b.sort_order`, t, t, t),
+    n("SELECT COUNT(*) AS n FROM bookings WHERE status = 'pending'"),
+    n("SELECT COUNT(*) AS n FROM reservations WHERE status = 'pending'"),
+    n("SELECT COUNT(*) AS n FROM bookings WHERE check_in = ? AND status IN ('pending','confirmed')", t),
+    n("SELECT COUNT(*) AS n FROM bookings WHERE check_out = ? AND status = 'checked_in'", t),
+    n("SELECT COUNT(*) AS n FROM reservations WHERE date = ? AND status IN ('pending','confirmed','seated')", t),
+    n('SELECT COUNT(*) AS n FROM messages WHERE is_read = 0'),
+    n(`SELECT COALESCE(SUM(total),0) AS n FROM bookings
       WHERE status IN ('confirmed','checked_in','checked_out') AND substr(check_in,1,7) = ?`, t.slice(0, 7)),
-    occupancy,
-    upcoming_bookings: all(`SELECT x.*, b.location AS branch_location FROM bookings x JOIN branches b ON b.id = x.branch_id
+    all(`SELECT x.*, b.location AS branch_location FROM bookings x JOIN branches b ON b.id = x.branch_id
       WHERE x.check_in >= ? AND x.status IN ('pending','confirmed') ORDER BY x.check_in, x.id LIMIT 8`, t),
-    upcoming_reservations: all(`SELECT x.*, b.location AS branch_location FROM reservations x JOIN branches b ON b.id = x.branch_id
+    all(`SELECT x.*, b.location AS branch_location FROM reservations x JOIN branches b ON b.id = x.branch_id
       WHERE x.date >= ? AND x.status IN ('pending','confirmed') ORDER BY x.date, x.time LIMIT 8`, t),
+  ]);
+  res.json({
+    today: t, pending_bookings, pending_reservations, arrivals_today, departures_today, reservations_today,
+    unread_messages, month_revenue, upcoming_bookings, upcoming_reservations,
+    occupancy: occupancy.map(({ offline, ...o }) => ({ ...o, booked: Math.min(o.total, o.booked + offline) })),
   });
 });
 
@@ -93,7 +95,7 @@ function listQuery(table, dateCol, q) {
   if (q.to && U.isDate(q.to)) { where.push(`x.${dateCol} <= ?`); params.push(q.to); }
   if (q.q) {
     const nameCol = table === 'bookings' ? 'guest_name' : 'name';
-    where.push(`(x.ref LIKE ? OR x.${nameCol} LIKE ? OR x.phone LIKE ?)`);
+    where.push(`(x.ref ILIKE ? OR x.${nameCol} ILIKE ? OR x.phone ILIKE ?)`);
     const like = `%${String(q.q).trim()}%`;
     params.push(like, like, like);
   }
@@ -101,8 +103,8 @@ function listQuery(table, dateCol, q) {
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY x.created_at DESC, x.id DESC LIMIT 1000`, ...params);
 }
 
-router.get('/bookings', (req, res) => res.json(listQuery('bookings', 'check_in', req.query)));
-router.get('/reservations', (req, res) => res.json(listQuery('reservations', 'date', req.query)));
+router.get('/bookings', async (req, res) => res.json(await listQuery('bookings', 'check_in', req.query)));
+router.get('/reservations', async (req, res) => res.json(await listQuery('reservations', 'date', req.query)));
 
 // Guests get an email when staff confirm or cancel.
 async function emailOnStatusChange(prev, row, isRoom) {
@@ -110,52 +112,52 @@ async function emailOnStatusChange(prev, row, isRoom) {
   if (!row.email) return { ok: false, error: 'No guest email on this booking' };
   return mail.notifyGuest(row.status, row, isRoom);
 }
-// Express 4 does not catch rejected promises, so pass them on to the error handler.
-const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-
-router.patch('/bookings/:id', wrap(async (req, res) => {
-  const bk = get('SELECT * FROM bookings WHERE id = ?', Number(req.params.id));
+router.patch('/bookings/:id', async (req, res) => {
+  const bk = await get('SELECT * FROM bookings WHERE id = ?', Number(req.params.id));
   if (!bk) throw new U.HttpError(404, 'Booking not found');
-  const status = req.body.status != null ? U.oneOf(req.body.status, B.BOOKING_STATUSES, 'status') : bk.status;
-  const note = req.body.admin_note != null ? U.str(req.body.admin_note, { field: 'Note', max: 1000 }) : bk.admin_note;
-  tx(() => {
+  const body = req.body || {};
+  const status = body.status != null ? U.oneOf(body.status, B.BOOKING_STATUSES, 'status') : bk.status;
+  const note = body.admin_note != null ? U.str(body.admin_note, { field: 'Note', max: 1000 }) : bk.admin_note;
+  const updated = await tx(async () => {
     // Re-activating a cancelled/finished booking must not overbook.
     if (!B.ACTIVE_BOOKING.includes(bk.status) && B.ACTIVE_BOOKING.includes(status)) {
-      const rt = get('SELECT * FROM room_types WHERE id = ?', bk.room_type_id);
-      if (B.roomsAvailable(rt, bk.check_in, bk.check_out, bk.id) < bk.rooms) {
+      const rt = await get('SELECT * FROM room_types WHERE id = ?', bk.room_type_id);
+      await B.lockRoomType(rt.id);
+      if (await B.roomsAvailable(rt, bk.check_in, bk.check_out, bk.id) < bk.rooms) {
         throw U.bad('Not enough rooms are free for these dates to restore this booking');
       }
     }
-    run("UPDATE bookings SET status = ?, admin_note = ?, updated_at = datetime('now') WHERE id = ?", status, note, bk.id);
+    return (await run('UPDATE bookings SET status = ?, admin_note = ?, updated_at = now_text() WHERE id = ? RETURNING *', status, note, bk.id)).rows[0];
   });
-  const updated = get('SELECT * FROM bookings WHERE id = ?', bk.id);
   res.json({ ...updated, email_result: await emailOnStatusChange(bk.status, updated, true) });
-}));
+});
 
-router.patch('/reservations/:id', wrap(async (req, res) => {
-  const r = get('SELECT * FROM reservations WHERE id = ?', Number(req.params.id));
+router.patch('/reservations/:id', async (req, res) => {
+  const r = await get('SELECT * FROM reservations WHERE id = ?', Number(req.params.id));
   if (!r) throw new U.HttpError(404, 'Reservation not found');
-  const status = req.body.status != null ? U.oneOf(req.body.status, B.RESERVATION_STATUSES, 'status') : r.status;
-  const note = req.body.admin_note != null ? U.str(req.body.admin_note, { field: 'Note', max: 1000 }) : r.admin_note;
-  run("UPDATE reservations SET status = ?, admin_note = ?, updated_at = datetime('now') WHERE id = ?", status, note, r.id);
-  const updated = get('SELECT * FROM reservations WHERE id = ?', r.id);
+  const body = req.body || {};
+  const status = body.status != null ? U.oneOf(body.status, B.RESERVATION_STATUSES, 'status') : r.status;
+  const note = body.admin_note != null ? U.str(body.admin_note, { field: 'Note', max: 1000 }) : r.admin_note;
+  const { rows: [updated] } = await run('UPDATE reservations SET status = ?, admin_note = ?, updated_at = now_text() WHERE id = ? RETURNING *',
+    status, note, r.id);
   res.json({ ...updated, email_result: await emailOnStatusChange(r.status, updated, false) });
-}));
+});
 
 // Email history for one booking / reservation, and manual (re)send.
-router.get('/emails', (req, res) => {
-  res.json(all('SELECT * FROM email_log WHERE ref = ? ORDER BY id DESC LIMIT 50', String(req.query.ref || '')));
+router.get('/emails', async (req, res) => {
+  res.json(await all('SELECT * FROM email_log WHERE ref = ? ORDER BY id DESC LIMIT 50', String(req.query.ref || '')));
 });
-router.post('/:table(bookings|reservations)/:id/email', wrap(async (req, res) => {
-  const isRoom = req.params.table === 'bookings';
-  const row = get(`SELECT * FROM ${isRoom ? 'bookings' : 'reservations'} WHERE id = ?`, Number(req.params.id));
+async function resendEmail(req, res, isRoom) {
+  const row = await get(`SELECT * FROM ${isRoom ? 'bookings' : 'reservations'} WHERE id = ?`, Number(req.params.id));
   if (!row) throw new U.HttpError(404, 'Not found');
   const kind = U.oneOf(req.body?.kind, ['received', 'confirmed', 'cancelled'], 'email type');
   if (!row.email) throw U.bad('This guest did not give an email address');
   const r = await mail.notifyGuest(kind, row, isRoom);
   if (!r.ok) throw U.bad('Email could not be sent: ' + r.error);
   res.json({ ok: true });
-}));
+}
+router.post('/bookings/:id/email', (req, res) => resendEmail(req, res, true));
+router.post('/reservations/:id/email', (req, res) => resendEmail(req, res, false));
 
 function toCsv(rows, cols) {
   const esc = (v) => {
@@ -165,28 +167,28 @@ function toCsv(rows, cols) {
   };
   return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
 }
-router.get('/bookings.csv', (req, res) => {
-  res.type('text/csv').attachment('atithi-room-bookings.csv').send(toCsv(listQuery('bookings', 'check_in', req.query),
+router.get('/bookings.csv', async (req, res) => {
+  res.type('text/csv').attachment('atithi-room-bookings.csv').send(toCsv(await listQuery('bookings', 'check_in', req.query),
     ['ref', 'branch_location', 'room_name', 'guest_name', 'phone', 'email', 'check_in', 'check_out', 'nights', 'rooms',
       'adults', 'children', 'price_per_night', 'total', 'status', 'special_requests', 'admin_note', 'created_at']));
 });
-router.get('/reservations.csv', (req, res) => {
-  res.type('text/csv').attachment('atithi-table-reservations.csv').send(toCsv(listQuery('reservations', 'date', req.query),
+router.get('/reservations.csv', async (req, res) => {
+  res.type('text/csv').attachment('atithi-table-reservations.csv').send(toCsv(await listQuery('reservations', 'date', req.query),
     ['ref', 'branch_location', 'name', 'phone', 'email', 'date', 'time', 'guests', 'seating', 'occasion', 'status',
       'notes', 'admin_note', 'created_at']));
 });
 
 // ---------------- Messages ----------------
-router.get('/messages', (req, res) => {
-  res.json(all(`SELECT m.*, b.location AS branch_location FROM messages m LEFT JOIN branches b ON b.id = m.branch_id
+router.get('/messages', async (req, res) => {
+  res.json(await all(`SELECT m.*, b.location AS branch_location FROM messages m LEFT JOIN branches b ON b.id = m.branch_id
     ORDER BY m.created_at DESC, m.id DESC LIMIT 500`));
 });
-router.patch('/messages/:id', (req, res) => {
-  run('UPDATE messages SET is_read = ? WHERE id = ?', req.body.is_read ? 1 : 0, Number(req.params.id));
+router.patch('/messages/:id', async (req, res) => {
+  await run('UPDATE messages SET is_read = ? WHERE id = ?', req.body?.is_read ? 1 : 0, Number(req.params.id));
   res.json({ ok: true });
 });
-router.delete('/messages/:id', (req, res) => {
-  run('DELETE FROM messages WHERE id = ?', Number(req.params.id));
+router.delete('/messages/:id', async (req, res) => {
+  await run('DELETE FROM messages WHERE id = ?', Number(req.params.id));
   res.json({ ok: true });
 });
 
@@ -196,8 +198,8 @@ function photoList(v) {
   if (list.length > 12) throw U.bad('Up to 12 photos per room type');
   return list;
 }
-function roomInput(body) {
-  const b = B.getBranch(body.branch_id);
+async function roomInput(body) {
+  const b = await B.getBranch(body.branch_id);
   if (!b.has_lodging) throw U.bad('This branch does not offer rooms');
   // First photo is the cover (image_url); the rest are stored in photos.
   const photos = body.photos !== undefined ? photoList(body.photos) : [U.str(body.image_url, { field: 'Image URL', max: 500 })].filter(Boolean);
@@ -216,36 +218,36 @@ function roomInput(body) {
     JSON.stringify(photos.slice(1)),
   ];
 }
-router.get('/rooms', (req, res) => {
-  res.json(all(`SELECT r.*, b.location AS branch_location FROM room_types r JOIN branches b ON b.id = r.branch_id
+router.get('/rooms', async (req, res) => {
+  res.json(await all(`SELECT r.*, b.location AS branch_location FROM room_types r JOIN branches b ON b.id = r.branch_id
     ORDER BY b.sort_order, r.sort_order, r.price`));
 });
-router.post('/rooms', (req, res) => {
-  const r = run(`INSERT INTO room_types (branch_id, name, description, capacity, beds, price, total_rooms, amenities, image_url, active, sort_order, photos)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, ...roomInput(req.body || {}));
-  res.status(201).json(get('SELECT * FROM room_types WHERE id = ?', Number(r.lastInsertRowid)));
+router.post('/rooms', async (req, res) => {
+  const { rows } = await run(`INSERT INTO room_types (branch_id, name, description, capacity, beds, price, total_rooms, amenities, image_url, active, sort_order, photos)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`, ...await roomInput(req.body || {}));
+  res.status(201).json(rows[0]);
 });
-router.put('/rooms/:id', (req, res) => {
+router.put('/rooms/:id', async (req, res) => {
   const id = Number(req.params.id);
-  if (!get('SELECT id FROM room_types WHERE id = ?', id)) throw new U.HttpError(404, 'Room type not found');
-  run(`UPDATE room_types SET branch_id=?, name=?, description=?, capacity=?, beds=?, price=?, total_rooms=?, amenities=?,
-    image_url=?, active=?, sort_order=?, photos=? WHERE id = ?`, ...roomInput(req.body || {}), id);
-  res.json(get('SELECT * FROM room_types WHERE id = ?', id));
+  const { rows } = await run(`UPDATE room_types SET branch_id=?, name=?, description=?, capacity=?, beds=?, price=?, total_rooms=?, amenities=?,
+    image_url=?, active=?, sort_order=?, photos=? WHERE id = ? RETURNING *`, ...await roomInput(req.body || {}), id);
+  if (!rows[0]) throw new U.HttpError(404, 'Room type not found');
+  res.json(rows[0]);
 });
-router.delete('/rooms/:id', (req, res) => {
+router.delete('/rooms/:id', async (req, res) => {
   const id = Number(req.params.id);
   // Keep room types that have bookings (for history); just hide them.
-  if (get('SELECT COUNT(*) AS n FROM bookings WHERE room_type_id = ?', id).n > 0) {
-    run('UPDATE room_types SET active = 0 WHERE id = ?', id);
+  if ((await get('SELECT COUNT(*) AS n FROM bookings WHERE room_type_id = ?', id)).n > 0) {
+    await run('UPDATE room_types SET active = 0 WHERE id = ?', id);
     return res.json({ ok: true, deactivated: true });
   }
-  run('DELETE FROM room_types WHERE id = ?', id);
+  await run('DELETE FROM room_types WHERE id = ?', id);
   res.json({ ok: true });
 });
 
 // ---------------- Menu ----------------
-function menuInput(body) {
-  const b = B.getBranch(body.branch_id);
+async function menuInput(body) {
+  const b = await B.getBranch(body.branch_id);
   return [
     b.id,
     U.str(body.category, { field: 'Category', max: 60, required: true }),
@@ -257,36 +259,36 @@ function menuInput(body) {
     body.active === false || body.active === 0 ? 0 : 1,
   ];
 }
-router.get('/menu', (req, res) => {
-  res.json(all(`SELECT m.*, b.location AS branch_location FROM menu_items m JOIN branches b ON b.id = m.branch_id
+router.get('/menu', async (req, res) => {
+  res.json(await all(`SELECT m.*, b.location AS branch_location FROM menu_items m JOIN branches b ON b.id = m.branch_id
     ORDER BY b.sort_order, m.category, m.name`));
 });
-router.post('/menu', (req, res) => {
-  const r = run('INSERT INTO menu_items (branch_id, category, name, description, price, veg, popular, active) VALUES (?,?,?,?,?,?,?,?)',
-    ...menuInput(req.body || {}));
-  res.status(201).json(get('SELECT * FROM menu_items WHERE id = ?', Number(r.lastInsertRowid)));
+router.post('/menu', async (req, res) => {
+  const { rows } = await run('INSERT INTO menu_items (branch_id, category, name, description, price, veg, popular, active) VALUES (?,?,?,?,?,?,?,?) RETURNING *',
+    ...await menuInput(req.body || {}));
+  res.status(201).json(rows[0]);
 });
-router.put('/menu/:id', (req, res) => {
+router.put('/menu/:id', async (req, res) => {
   const id = Number(req.params.id);
-  if (!get('SELECT id FROM menu_items WHERE id = ?', id)) throw new U.HttpError(404, 'Menu item not found');
-  run('UPDATE menu_items SET branch_id=?, category=?, name=?, description=?, price=?, veg=?, popular=?, active=? WHERE id = ?',
-    ...menuInput(req.body || {}), id);
-  res.json(get('SELECT * FROM menu_items WHERE id = ?', id));
+  const { rows } = await run('UPDATE menu_items SET branch_id=?, category=?, name=?, description=?, price=?, veg=?, popular=?, active=? WHERE id = ? RETURNING *',
+    ...await menuInput(req.body || {}), id);
+  if (!rows[0]) throw new U.HttpError(404, 'Menu item not found');
+  res.json(rows[0]);
 });
-router.delete('/menu/:id', (req, res) => {
-  run('DELETE FROM menu_items WHERE id = ?', Number(req.params.id));
+router.delete('/menu/:id', async (req, res) => {
+  await run('DELETE FROM menu_items WHERE id = ?', Number(req.params.id));
   res.json({ ok: true });
 });
 
 // ---------------- Branch details ----------------
-router.put('/branches/:id', (req, res) => {
-  const b = B.getBranch(req.params.id);
+router.put('/branches/:id', async (req, res) => {
+  const b = await B.getBranch(req.params.id);
   const x = req.body || {};
   const open_time = U.time(x.open_time, 'Opening time');
   const close_time = U.time(x.close_time, 'Closing time');
   if (close_time <= open_time) throw U.bad('Closing time must be after opening time');
-  run(`UPDATE branches SET name=?, location=?, tagline=?, description=?, address=?, phone=?, whatsapp=?, email=?, map_query=?,
-    open_time=?, close_time=?, checkin_time=?, checkout_time=?, seating=?, facilities=? WHERE id = ?`,
+  const { rows } = await run(`UPDATE branches SET name=?, location=?, tagline=?, description=?, address=?, phone=?, whatsapp=?, email=?, map_query=?,
+    open_time=?, close_time=?, checkin_time=?, checkout_time=?, seating=?, facilities=? WHERE id = ? RETURNING *`,
   U.str(x.name, { field: 'Name', max: 100, required: true }),
   U.str(x.location, { field: 'Location', max: 60, required: true }),
   U.str(x.tagline, { field: 'Tagline', max: 150 }),
@@ -302,32 +304,42 @@ router.put('/branches/:id', (req, res) => {
   U.str(x.seating, { field: 'Seating', max: 300, required: true }),
   U.str(x.facilities, { field: 'Facilities', max: 600 }),
   b.id);
-  res.json(get('SELECT * FROM branches WHERE id = ?', b.id));
+  res.json(rows[0]);
 });
 
 // ---------------- Room availability (mark rooms booked / available) ----------------
-router.get('/availability', (req, res) => {
-  const branch = B.getBranch(req.query.branch);
+router.get('/availability', async (req, res) => {
+  const branch = await B.getBranch(req.query.branch);
   const from = U.isDate(req.query.from) ? req.query.from : U.today();
   const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 62);
   const dates = Array.from({ length: days }, (_, i) => U.addDays(from, i));
-  const notes = all(`SELECT k.* FROM room_blocks k JOIN room_types r ON r.id = k.room_type_id
-    WHERE r.branch_id = ? AND k.date >= ? AND k.date <= ?`, branch.id, dates[0], dates[days - 1]);
-  const noteOf = (id, d) => notes.find((k) => k.room_type_id === id && k.date === d)?.note || '';
-  const rooms = all('SELECT * FROM room_types WHERE branch_id = ? ORDER BY active DESC, sort_order, price', branch.id).map((rt) => ({
+  const [types, nights] = await Promise.all([
+    all('SELECT * FROM room_types WHERE branch_id = ? ORDER BY active DESC, sort_order, price', branch.id),
+    // Every room type × night in one query: online bookings, staff marks and the staff note.
+    all(`SELECT r.id AS room_type_id, d.night,
+        (SELECT COALESCE(SUM(b.rooms), 0) FROM bookings b WHERE b.room_type_id = r.id
+          AND b.status IN ('pending','confirmed','checked_in') AND b.check_in <= d.night AND b.check_out > d.night) AS booked,
+        COALESCE(k.rooms, 0) AS blocked, COALESCE(k.note, '') AS note
+      FROM room_types r
+      CROSS JOIN (SELECT to_char(g, 'YYYY-MM-DD') AS night FROM generate_series(?::date, ?::date, interval '1 day') g) d
+      LEFT JOIN room_blocks k ON k.room_type_id = r.id AND k.date = d.night
+      WHERE r.branch_id = ?`, dates[0], dates[days - 1], branch.id),
+  ]);
+  const at = new Map(nights.map((n) => [`${n.room_type_id}|${n.night}`, n]));
+  const rooms = types.map((rt) => ({
     id: rt.id, name: rt.name, total_rooms: rt.total_rooms, active: rt.active,
     days: dates.map((d) => {
-      const u = B.nightUsage(rt.id, d);
-      return { date: d, ...u, free: Math.max(0, rt.total_rooms - u.booked - u.blocked), note: noteOf(rt.id, d) };
+      const { booked = 0, blocked = 0, note = '' } = at.get(`${rt.id}|${d}`) || {};
+      return { date: d, booked, blocked, free: Math.max(0, rt.total_rooms - booked - blocked), note };
     }),
   }));
   res.json({ branch_id: branch.id, dates, rooms });
 });
 
 // Set how many rooms are booked offline / unavailable on each night from `from` to `to` (inclusive).
-router.put('/availability', (req, res) => {
+router.put('/availability', async (req, res) => {
   const x = req.body || {};
-  const rt = get('SELECT * FROM room_types WHERE id = ?', Number(x.room_type_id) || 0);
+  const rt = await get('SELECT * FROM room_types WHERE id = ?', Number(x.room_type_id) || 0);
   if (!rt) throw U.bad('Please choose a room type');
   if (!U.isDate(x.from)) throw U.bad('Please choose a start date');
   const to = U.isDate(x.to) ? x.to : x.from;
@@ -337,26 +349,28 @@ router.put('/availability', (req, res) => {
   const note = U.str(x.note, { field: 'Note', max: 200 });
   const count = mode === 'set' ? U.int(x.rooms, { field: 'Rooms', min: 0, max: rt.total_rooms }) : 0;
   const skipped = [];
-  tx(() => {
-    for (let d = x.from; d <= to; d = U.addDays(d, 1)) {
-      const { booked } = B.nightUsage(rt.id, d);
+  await tx(async () => {
+    await B.lockRoomType(rt.id);
+    const nights = await all(`SELECT d.night, (SELECT COALESCE(SUM(b.rooms), 0) FROM bookings b WHERE b.room_type_id = ?
+        AND b.status IN ('pending','confirmed','checked_in') AND b.check_in <= d.night AND b.check_out > d.night) AS booked
+      FROM (SELECT to_char(g, 'YYYY-MM-DD') AS night FROM generate_series(?::date, ?::date, interval '1 day') g) d`, rt.id, x.from, to);
+    const dates = [], counts = [];
+    for (const { night, booked } of nights) {
       const free = Math.max(0, rt.total_rooms - booked); // rooms not taken by online bookings
       let n = mode === 'sold_out' ? free : count;
-      if (n > free) { skipped.push(d); n = free; }
-      if (n > 0) {
-        run(`INSERT INTO room_blocks (room_type_id, date, rooms, note) VALUES (?,?,?,?)
-          ON CONFLICT(room_type_id, date) DO UPDATE SET rooms = excluded.rooms, note = excluded.note`, rt.id, d, n, note);
-      } else {
-        run('DELETE FROM room_blocks WHERE room_type_id = ? AND date = ?', rt.id, d);
-      }
+      if (n > free) { skipped.push(night); n = free; }
+      if (n > 0) { dates.push(night); counts.push(n); }
+    }
+    await run('DELETE FROM room_blocks WHERE room_type_id = ? AND date >= ? AND date <= ?', rt.id, x.from, to);
+    if (dates.length) {
+      await run('INSERT INTO room_blocks (room_type_id, date, rooms, note) SELECT ?, unnest(?::text[]), unnest(?::int[]), ?',
+        rt.id, dates, counts, note);
     }
   });
   res.json({ ok: true, skipped });
 });
 
 // ---------------- Photo uploads ----------------
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 function imageExt(buf) {
   if (buf.length < 12) return null;
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
@@ -365,21 +379,26 @@ function imageExt(buf) {
   if (buf.toString('ascii', 0, 4) === 'GIF8') return 'gif';
   return null;
 }
-router.post('/upload', express.raw({ type: () => true, limit: '10mb' }), (req, res) => {
+const IMAGE_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+router.post('/upload', express.raw({ type: () => true, limit: '10mb' }), async (req, res) => {
   const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
   const ext = imageExt(buf);
   if (!ext) throw U.bad('Please upload a JPG, PNG, WEBP or GIF image');
   const name = `${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
-  res.status(201).json({ url: `/uploads/${name}` });
+  try {
+    res.status(201).json({ url: await storage.saveImage(name, buf, IMAGE_TYPES[ext]) });
+  } catch (e) {
+    console.error(e);
+    throw U.bad(e.message);
+  }
 });
 
 // ---------------- Offers ----------------
-function offerInput(body) {
+async function offerInput(body) {
   const valid_until = U.str(body.valid_until, { field: 'Valid until', max: 10 });
   if (valid_until && !U.isDate(valid_until)) throw U.bad('Please choose a valid end date');
   return [
-    body.branch_id ? B.getBranch(body.branch_id).id : null,
+    body.branch_id ? (await B.getBranch(body.branch_id)).id : null,
     U.str(body.title, { field: 'Title', max: 120, required: true }),
     U.str(body.description, { field: 'Description', max: 800 }),
     U.str(body.badge, { field: 'Badge', max: 30 }),
@@ -389,24 +408,24 @@ function offerInput(body) {
     U.int(body.sort_order ?? 0, { field: 'Order', min: 0, max: 999 }),
   ];
 }
-router.get('/offers', (req, res) => {
-  res.json(all(`SELECT o.*, b.location AS branch_location FROM offers o LEFT JOIN branches b ON b.id = o.branch_id
+router.get('/offers', async (req, res) => {
+  res.json(await all(`SELECT o.*, b.location AS branch_location FROM offers o LEFT JOIN branches b ON b.id = o.branch_id
     ORDER BY o.active DESC, o.sort_order, o.id DESC`));
 });
-router.post('/offers', (req, res) => {
-  const r = run(`INSERT INTO offers (branch_id, title, description, badge, image_url, valid_until, active, sort_order)
-    VALUES (?,?,?,?,?,?,?,?)`, ...offerInput(req.body || {}));
-  res.status(201).json(get('SELECT * FROM offers WHERE id = ?', Number(r.lastInsertRowid)));
+router.post('/offers', async (req, res) => {
+  const { rows } = await run(`INSERT INTO offers (branch_id, title, description, badge, image_url, valid_until, active, sort_order)
+    VALUES (?,?,?,?,?,?,?,?) RETURNING *`, ...await offerInput(req.body || {}));
+  res.status(201).json(rows[0]);
 });
-router.put('/offers/:id', (req, res) => {
+router.put('/offers/:id', async (req, res) => {
   const id = Number(req.params.id);
-  if (!get('SELECT id FROM offers WHERE id = ?', id)) throw new U.HttpError(404, 'Offer not found');
-  run(`UPDATE offers SET branch_id=?, title=?, description=?, badge=?, image_url=?, valid_until=?, active=?, sort_order=?
-    WHERE id = ?`, ...offerInput(req.body || {}), id);
-  res.json(get('SELECT * FROM offers WHERE id = ?', id));
+  const { rows } = await run(`UPDATE offers SET branch_id=?, title=?, description=?, badge=?, image_url=?, valid_until=?, active=?, sort_order=?
+    WHERE id = ? RETURNING *`, ...await offerInput(req.body || {}), id);
+  if (!rows[0]) throw new U.HttpError(404, 'Offer not found');
+  res.json(rows[0]);
 });
-router.delete('/offers/:id', (req, res) => {
-  run('DELETE FROM offers WHERE id = ?', Number(req.params.id));
+router.delete('/offers/:id', async (req, res) => {
+  await run('DELETE FROM offers WHERE id = ?', Number(req.params.id));
   res.json({ ok: true });
 });
 
@@ -415,17 +434,18 @@ const SETTING_FIELDS = {
   announcement: 200, hero_title: 120, hero_highlight: 120, hero_text: 400, hero_image: 500, about_text: 1000,
   smtp_host: 120, smtp_port: 5, smtp_user: 120, mail_from: 120, mail_from_name: 80, notify_email: 300, site_url: 200,
 };
-router.get('/settings', (req, res) => {
-  const s = getSettings();
+router.get('/settings', async (req, res) => {
+  const s = await getSettings();
+  const c = await mail.config();
   const out = Object.fromEntries(Object.keys(SETTING_FIELDS).map((k) => [k, s[k] || '']));
   res.json({
     ...out,
     smtp_pass_set: Boolean(s.smtp_pass || process.env.SMTP_PASS),
     resend_key_set: Boolean(s.resend_api_key || process.env.RESEND_API_KEY),
-    email_ready: mail.isConfigured(), email_provider: mail.provider(),
+    email_ready: mail.isConfigured(c), email_provider: mail.provider(c),
   });
 });
-router.put('/settings', (req, res) => {
+router.put('/settings', async (req, res) => {
   const x = req.body || {};
   const out = {};
   for (const [k, max] of Object.entries(SETTING_FIELDS)) {
@@ -442,19 +462,19 @@ router.put('/settings', (req, res) => {
     if (!out.resend_api_key.startsWith('re_')) throw U.bad('A Resend API key starts with "re_"');
   }
   if (x.remove_resend_key) out.resend_api_key = '';
-  saveSettings(out);
+  await saveSettings(out);
   res.json({ ok: true });
 });
-router.post('/settings/test-email', wrap(async (req, res) => {
+router.post('/settings/test-email', async (req, res) => {
   const to = U.email(req.body?.to);
   if (!to) throw U.bad('Enter an email address to send the test to');
-  const { html, text } = mail.layout({
+  const { html, text } = await mail.layout({
     heading: 'Test email', intro: 'Email is working. Guests will now receive booking emails from this address.',
     rows: [['Sent at', new Date().toISOString()]], outro: '',
   });
   const r = await mail.send({ to, subject: 'Atithi — test email', html, text, kind: 'test' });
   if (!r.ok) throw U.bad('Could not send: ' + r.error);
   res.json({ ok: true });
-}));
+});
 
 module.exports = router;

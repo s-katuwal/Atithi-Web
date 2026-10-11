@@ -8,22 +8,34 @@ One website for all three branches:
 | Atithi Restro & Lodge — Birtamode | ✅ | ✅ |
 | Atithi Food Garden | — | ✅ (tables, parties & events) |
 
-## Run it
+## Where the data lives
+- **Database:** [Supabase](https://supabase.com) Postgres. Bookings, rooms, menu, offers, settings and admin logins are all stored there. The tables and starter data are created automatically the first time the app connects.
+- **Photos:** Supabase Storage, in a public bucket called `uploads` that is created automatically.
+- Supabase backs up your database. You can also browse the data in the dashboard under **Table Editor**.
 
-Requires **Node.js 22.13 or newer** (it uses Node's built-in SQLite, so you don't need to install a database).
+## Set up Supabase (once)
+1. Create a project at [supabase.com](https://supabase.com). Choose a region close to Nepal, such as Mumbai (`ap-south-1`), and save the database password.
+2. **Database URL:** click **Connect** at the top of the dashboard, then **Transaction pooler**, and copy the URI. Replace `[YOUR-PASSWORD]` with your database password. This is `DATABASE_URL`.
+3. **Storage key:** go to **Project Settings → API Keys** and copy the **secret** key (`sb_secret_…`), or the legacy `service_role` key. This is `SUPABASE_SERVICE_ROLE_KEY`. Your project URL (`https://xxxx.supabase.co`) is `SUPABASE_URL`.
+4. Put these in `.env.local` locally, and in your host's environment variables when deployed.
+
+The tables have row level security turned on with no policies. Supabase's public Data API therefore can't read them. The website connects directly with `DATABASE_URL`, so it isn't affected.
+
+## Run it locally
+Requires **Node.js 22.13 or newer**.
 
 ```bash
 npm install
+cp .env.example .env.local   # then fill in your values
 npm start
 ```
 
 - Website: http://localhost:3000
 - Staff admin panel: http://localhost:3000/admin
-  - First login → username `admin`, password `atithi@2078`. **Change it right away** in Admin → Settings.
-  - To use a different first password, start the server with `ADMIN_PASSWORD=yourpass npm start` before the first run.
+  - First login: username `admin`, password `atithi@2078`. **Change it right away** in Admin → Settings & email.
+  - To use a different first password, set `ADMIN_PASSWORD` in `.env.local` before the first run.
 
-Data is saved in `data/atithi.db` and uploaded photos in `data/uploads/`. Back up the `data` folder regularly.
-**Environment variables:** copy `.env.example` to `.env.local` and fill in your values: the Resend key, sender address, `PORT` (default 3000), `DATA_DIR` (default `./data`) and `ADMIN_PASSWORD` (used on first run only). `npm start` and `npm run dev` load `.env.local` automatically, and git ignores it. On a host such as Render, Railway or Vercel, add the same variables in the host's dashboard instead.
+**Environment variables:** `npm start` and `npm run dev` load `.env.local` automatically, and git ignores it. See `.env.example` for every option: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `NOTIFY_EMAIL`, `SITE_URL`, `ADMIN_PASSWORD` and `PORT`. If the Supabase Storage variables are left out locally, photos are saved to `data/uploads/` on your computer instead.
 
 ## What guests can do
 - **Book a room** (Laxmipur / Birtamode). Availability is checked live and overbooking is blocked. The price total is calculated automatically.
@@ -62,8 +74,12 @@ There is no online payment step. Guests pay at the branch.
 1. **Branches**: phone numbers, WhatsApp numbers, emails, and the **Food Garden address and location label**. A floating WhatsApp button appears automatically once a WhatsApp number is set.
 2. **Rooms & prices**: the seeded prices and room counts are examples.
 3. **Menu**: the seeded items and prices are examples.
-4. **Room photos**: upload them in Admin → Rooms & photos. Uploaded files are saved in `data/uploads/`, so back up the whole `data` folder, not just the database.
+4. **Room photos**: upload them in Admin → Rooms & photos. They are stored in Supabase Storage.
 5. **Email**: set up in Admin → Settings & email (see above), including the website address used in email links.
 
-## Deploying
-Any host that runs Node.js works, for example a VPS, Render or Railway. If the host's disk is temporary, mount a persistent disk and point `DATA_DIR` at it. Put the site behind HTTPS, either with your host's TLS or with nginx and Let's Encrypt.
+## Deploying to Vercel
+1. Push the code to GitHub and import the repository in Vercel. Vercel detects the Express app in `server.js` and serves `public/` from its CDN.
+2. In **Project → Settings → Environment Variables**, add `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `NOTIFY_EMAIL`, and `SITE_URL` (your live address, e.g. `https://atithi.vercel.app`). Then redeploy.
+3. Use the **Transaction pooler** connection string (port `6543`) for `DATABASE_URL`, because Vercel opens many short-lived connections.
+
+Other Node.js hosts (Render, Railway, a VPS) also work with the same environment variables. No disk is needed, since all data is in Supabase.
