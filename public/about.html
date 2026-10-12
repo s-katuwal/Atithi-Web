@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About Us — Atithi</title>
+  <meta name="theme-color" content="#1774BC">
+  <link rel="icon" href="/images/favicon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Mukta:wght@500;600;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="about">
+  <div id="site-header"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-wrap container">
+      <div class="inner">
+        <img class="logo" src="/images/logo-atithi.jpg" data-c-src="site_logo" alt="Atithi logo">
+        <div style="flex:1">
+          <div class="eyebrow left">About us</div>
+          <h1 data-c="about_title">About Atithi</h1>
+          <p data-c="about_intro">A family-run hospitality business from Jhapa, welcoming travellers, families and friends since 2078 B.S.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <!-- Our story -->
+    <section class="section" data-show="show_about_story">
+      <div class="container about-story">
+        <div>
+          <div class="eyebrow left">अतिथि देवो भवः</div>
+          <h2 data-c="about_story_title">Our story</h2>
+          <div class="about-text" id="aboutStory"></div>
+        </div>
+        <div class="about-photo" id="aboutPhoto"><img src="/images/logo-atithi.jpg" alt="Atithi"></div>
+      </div>
+    </section>
+
+    <!-- Numbers -->
+    <section class="about-stats-band" data-show="show_about_stats">
+      <div class="container about-stats" id="aboutStats"></div>
+    </section>
+
+    <!-- Values -->
+    <section class="section section-soft" data-show="show_about_values">
+      <div class="container">
+        <div class="section-head"><h2 data-c="about_values_title">What we stand for</h2></div>
+        <div class="features" id="aboutValues"></div>
+      </div>
+    </section>
+
+    <!-- Branches (from Admin → Branches) -->
+    <section class="section" data-show="show_about_branches">
+      <div class="container">
+        <div class="section-head"><div class="eyebrow">Our Branches</div><h2>Three places, one family</h2></div>
+        <div class="about-branches" id="aboutBranches"></div>
+      </div>
+    </section>
+
+    <!-- Quote -->
+    <section class="motto-band about-quote" data-show="show_about_quote">
+      <div class="container">
+        <blockquote><p data-c="about_quote">Our promise is simple: treat every guest the way we would treat family coming home.</p>
+          <footer>— <span data-c="about_quote_by">The Atithi family</span></footer></blockquote>
+      </div>
+    </section>
+
+    <!-- Call to action -->
+    <section class="section center">
+      <div class="container">
+        <h2 data-c="about_cta_title">Come and stay with us</h2>
+        <p class="muted" data-c="about_cta_text">Book a room or reserve a table online in less than a minute.</p>
+        <div class="hero-actions" style="justify-content:center"><a class="btn btn-primary" href="/book?type=room">Book a Room</a><a class="btn btn-accent" href="/book?type=table">Reserve a Table</a><a class="btn btn-ghost" href="/locations">Find us</a></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/about.js"></script>
+</body>
+</html>

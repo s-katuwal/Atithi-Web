@@ -219,15 +219,16 @@
         <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">${icon('menu', 28)}</button>
         <nav class="nav-links" aria-label="Main">
           <a href="/" class="${active === 'home' ? 'active' : ''}">Home</a>
+          <a href="/about" class="${active === 'about' ? 'active' : ''}" data-show="show_about">About</a>
           <div class="nav-drop">
-            <button type="button" aria-haspopup="true">Our Branches ${icon('down', 16)}</button>
-            <div class="nav-drop-menu" id="nav-branches">${BRANCHES.map(item).join('')}</div>
+            <button type="button" aria-haspopup="true" class="${active === 'locations' ? 'active' : ''}">Our Branches ${icon('down', 16)}</button>
+            <div class="nav-drop-menu"><div id="nav-branches">${BRANCHES.map(item).join('')}</div>
+              <a href="/locations" class="nav-drop-all" data-show="show_locations">${icon('pin', 18)} <span><strong>Locations &amp; maps</strong><small>Directions to every branch</small></span></a></div>
           </div>
           <a href="/book?type=room" class="${active === 'room' ? 'active' : ''}">Book a Stay</a>
           <a href="/book?type=table" class="${active === 'table' ? 'active' : ''}">Reserve a Table</a>
           <a href="/gallery" class="${active === 'gallery' ? 'active' : ''}" data-show="show_gallery">Gallery</a>
           <a href="/careers" class="${active === 'careers' ? 'active' : ''}" data-show="show_careers">Careers</a>
-          <a href="/locations" class="${active === 'locations' ? 'active' : ''}" data-show="show_locations">Locations</a>
           <a href="/#contact">Contact</a>
           <a href="/book" class="btn btn-accent">${icon('calendar', 18)} <span data-c="book_btn">Book Now</span></a>
         </nav>
@@ -274,7 +275,7 @@
         </div>
         <div class="container footer-bottom">
           <span>© ${year} <span data-c="footer_copyright">Atithi Restro & Lodge · Atithi Food Garden</span>. All rights reserved.</span>
-          <span><a href="/track">Manage booking</a> · <a href="/gallery" data-show="show_gallery">Gallery</a> · <a href="/careers" data-show="show_careers">Careers</a> · <a href="/locations" data-show="show_locations">Locations</a> · <a href="/admin">Staff login</a></span>
+          <span><a href="/about" data-show="show_about">About us</a> · <a href="/track">Manage booking</a> · <a href="/gallery" data-show="show_gallery">Gallery</a> · <a href="/careers" data-show="show_careers">Careers</a> · <a href="/locations" data-show="show_locations">Locations</a> · <a href="/admin">Staff login</a></span>
         </div>
         <div class="footer-stripe"></div>
       </footer>`;
