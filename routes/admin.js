@@ -286,11 +286,19 @@ router.delete('/menu/:id', async (req, res) => {
 router.put('/branches/:id', async (req, res) => {
   const b = await B.getBranch(req.params.id);
   const x = req.body || {};
+  const coord = (v, max, field) => {
+    if (v === '' || v == null) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || Math.abs(n) > max) throw U.bad(`${field} is not valid`);
+    return Math.round(n * 1e6) / 1e6;
+  };
+  const lat = coord(x.lat, 90, 'Latitude'), lng = coord(x.lng, 180, 'Longitude');
+  if ((lat == null) !== (lng == null)) throw U.bad('Please set both latitude and longitude, or clear both');
   const open_time = U.time(x.open_time, 'Opening time');
   const close_time = U.time(x.close_time, 'Closing time');
   if (close_time <= open_time) throw U.bad('Closing time must be after opening time');
   const { rows } = await run(`UPDATE branches SET name=?, location=?, tagline=?, description=?, address=?, phone=?, whatsapp=?, email=?, map_query=?,
-    open_time=?, close_time=?, checkin_time=?, checkout_time=?, seating=?, facilities=? WHERE id = ? RETURNING *`,
+    open_time=?, close_time=?, checkin_time=?, checkout_time=?, seating=?, facilities=?, lat=?, lng=? WHERE id = ? RETURNING *`,
   U.str(x.name, { field: 'Name', max: 100, required: true }),
   U.str(x.location, { field: 'Location', max: 60, required: true }),
   U.str(x.tagline, { field: 'Tagline', max: 150 }),
@@ -305,8 +313,48 @@ router.put('/branches/:id', async (req, res) => {
   U.time(x.checkout_time, 'Check-out time'),
   U.str(x.seating, { field: 'Seating', max: 300, required: true }),
   U.str(x.facilities, { field: 'Facilities', max: 600 }),
+  lat, lng,
   b.id);
   res.json(rows[0]);
+});
+
+// Turn a Google Maps link (including short maps.app.goo.gl share links) into coordinates.
+function coordsFromText(t) {
+  const s = decodeURIComponent(String(t));
+  // Embed code from Google Maps → Share → Embed a map has the centre as !2d<lng>!3d<lat> (note the reversed order).
+  const embed = s.match(/!2d(-?\d+(?:\.\d+)?)!3d(-?\d+(?:\.\d+)?)/);
+  if (embed && Math.abs(embed[2]) <= 90 && Math.abs(embed[1]) <= 180) return { lat: Number(embed[2]), lng: Number(embed[1]) };
+  const pats = [/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/, /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&](?:q|ll|query|destination|center)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/, /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/];
+  for (const p of pats) {
+    const m = s.match(p);
+    if (m && Math.abs(m[1]) <= 90 && Math.abs(m[2]) <= 180) return { lat: Number(m[1]), lng: Number(m[2]) };
+  }
+  return null;
+}
+const MAP_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|(www\.)?google\.[a-z.]+|maps\.google\.[a-z.]+)$/i;
+router.post('/resolve-map-link', async (req, res) => {
+  const text = U.str(req.body?.url, { field: 'Link', max: 2000, required: true });
+  let found = coordsFromText(text);
+  if (!found) {
+    let url;
+    try { url = new URL(text); } catch { throw U.bad('Paste a Google Maps link, or coordinates like 26.6712, 87.6801'); }
+    if (url.protocol !== 'https:' || !MAP_HOSTS.test(url.hostname)) throw U.bad('Only Google Maps links can be used here');
+    // Follow the short link's redirects (up to 5, Google hosts only) to the full link that holds the coordinates.
+    for (let i = 0; i < 5 && !found; i++) {
+      const r = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(8000) }).catch(() => null);
+      const next = r && r.headers.get('location');
+      if (!next) {
+        if (r && r.ok) found = coordsFromText((await r.text()).slice(0, 200000).match(/(?:@|!3d)-?\d+\.\d+(?:,|!4d)-?\d+\.\d+/)?.[0] || '');
+        break;
+      }
+      url = new URL(next, url);
+      if (!MAP_HOSTS.test(url.hostname)) break;
+      found = coordsFromText(url.href);
+    }
+  }
+  if (!found) throw U.bad('Could not find the location in that link. In Google Maps, long-press the exact spot to drop a pin, then share that link.');
+  res.json(found);
 });
 
 // ---------------- Room availability (mark rooms booked / available) ----------------

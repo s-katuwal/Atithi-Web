@@ -160,3 +160,8 @@ table.av-table th.today { color: var(--blue-900); background: #E8F1FA; }
 .admin-tabs a { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-weight: 500; font-size: .9rem; }
 .admin-tabs a.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 .admin-tabs { justify-content: flex-start; }
+
+/* Branch map pin picker */
+.loc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.loc-row > .input[data-loc-paste] { flex: 1; min-width: 220px; }
+.loc-map { height: 320px; border-radius: 12px; border: 1px solid var(--line); margin-top: 10px; background: var(--bg-soft); z-index: 0; }

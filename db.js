@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS branches (
   facilities    TEXT NOT NULL DEFAULT '',
   sort_order    INTEGER NOT NULL DEFAULT 0
 );
+-- Exact map pin for each branch (set in Admin → Branches).
+ALTER TABLE branches ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE branches ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 
 CREATE TABLE IF NOT EXISTS room_types (
   id          SERIAL PRIMARY KEY,

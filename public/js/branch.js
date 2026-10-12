@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { $, $$, esc, rs, icon, list, api, getSite, lines, logoFor, roomArt, facilityIcon, fmtTime, telHref, waHref, offerCards } = window.Atithi;
+  const { $, $$, esc, rs, icon, list, api, getSite, lines, logoFor, roomArt, facilityIcon, fmtTime, telHref, waHref, offerCards, mapSrc, directionsHref, mapsHref } = window.Atithi;
 
   const id = location.pathname.split('/branches/')[1]?.replace(/\/$/, '') || new URLSearchParams(location.search).get('id') || '';
 
@@ -90,7 +90,9 @@
       <section class="branch-section">
         <h2 class="block-title">Location</h2>
         <iframe class="map-frame" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Map of ${esc(b.name)} ${esc(b.location)}"
-          src="https://www.google.com/maps?q=${encodeURIComponent(b.map_query || b.address)}&output=embed"></iframe>
+          src="${mapSrc(b)}"></iframe>
+        <div class="card-actions mt-2"><a class="btn btn-primary btn-sm" href="${directionsHref(b)}" target="_blank" rel="noopener">${icon('pin', 16)} Get directions</a>
+          <a class="btn btn-ghost btn-sm" href="${mapsHref(b)}" target="_blank" rel="noopener">Open in Google Maps ↗</a></div>
       </section>`;
 
     // Room photo thumbnails swap the main picture
@@ -118,7 +120,7 @@
     $('#branchSide').innerHTML = `
       <h3 style="color:var(--blue-900)">Visit us</h3>
       <ul class="info-list">
-        <li>${icon('pin')}<div><strong>Address</strong>${esc(b.address)}</div></li>
+        <li>${icon('pin')}<div><strong>Address</strong>${esc(b.address)}<br><a href="${directionsHref(b)}" target="_blank" rel="noopener">Get directions ↗</a></div></li>
         ${b.phone ? `<li>${icon('phone')}<div><strong>Phone</strong><a href="${telHref(b.phone)}">${esc(b.phone)}</a></div></li>` : ''}
         ${b.email ? `<li>${icon('mail')}<div><strong>Email</strong><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></div></li>` : ''}
         ${b.has_dining ? `<li>${icon('clock')}<div><strong>Restaurant hours</strong>${fmtTime(b.open_time)} – ${fmtTime(b.close_time)}</div></li>` : ''}

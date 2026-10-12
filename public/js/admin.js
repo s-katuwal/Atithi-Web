@@ -449,9 +449,20 @@
               : `<input type="hidden" name="checkin_time" value="${esc(b.checkin_time)}"><input type="hidden" name="checkout_time" value="${esc(b.checkout_time)}">`}
             ${field('Facilities (comma separated)', inp('facilities', b.facilities, 'maxlength="600"'), b.has_lodging ? '' : 'span-2')}
             ${field('Description', `<textarea class="input" name="description" maxlength="1500">${esc(b.description)}</textarea>`, 'span-all')}
+            <div class="field span-all loc-field">
+              <label>Exact location on the map</label>
+              <p class="hint" style="margin:0 0 8px">Click the map or drag the pin to the exact entrance. Or paste a Google Maps link (on your phone: long-press the spot in Google Maps → Share → Copy link), the “Embed a map” code, or coordinates.</p>
+              <div class="loc-row"><input class="input" data-loc-paste placeholder="Paste a Google Maps link or e.g. 26.6712, 87.6801">
+                <button type="button" class="btn btn-ghost btn-sm" data-loc-find>Use this</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-loc-clear>Clear pin</button></div>
+              <div class="loc-map" data-map></div>
+              <div class="loc-row mt-1"><span class="muted" style="font-size:.85rem">Latitude</span>${inp('lat', b.lat ?? '', 'inputmode="decimal" style="max-width:170px"')}
+                <span class="muted" style="font-size:.85rem">Longitude</span>${inp('lng', b.lng ?? '', 'inputmode="decimal" style="max-width:170px"')}</div>
+            </div>
           </div>
           <button class="btn btn-primary mt-2" type="submit">Save ${esc(b.location)}</button>
         </form>`).join('');
+      $$('form[data-id]', el).forEach((f) => initLocationPicker(f));
       el.onsubmit = async (e) => {
         e.preventDefault();
         const f = e.target, btn = f.querySelector('button[type=submit]');
@@ -791,6 +802,54 @@
       };
     },
   };
+
+  // ---------------- Map pin picker (Leaflet + OpenStreetMap, loaded only on the Branches page) ----------------
+  let leafletReady = null;
+  function loadLeaflet() {
+    leafletReady ||= new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      js.onload = () => resolve(window.L);
+      js.onerror = () => { leafletReady = null; reject(new Error('Could not load the map')); };
+      document.head.appendChild(js);
+    });
+    return leafletReady;
+  }
+  async function initLocationPicker(form) {
+    const latIn = form.elements.lat, lngIn = form.elements.lng, box = $('[data-map]', form);
+    let L;
+    try { L = await loadLeaflet(); } catch (x) { box.innerHTML = `<p class="muted center" style="padding:40px">${esc(x.message)}. You can still type coordinates below.</p>`; return; }
+    const has = () => latIn.value !== '' && lngIn.value !== '';
+    const map = L.map(box, { scrollWheelZoom: false }).setView(has() ? [+latIn.value, +lngIn.value] : [26.65, 87.7], has() ? 17 : 9);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+    let marker = null;
+    const place = (lat, lng, zoom) => {
+      lat = Math.round(lat * 1e6) / 1e6; lng = Math.round(lng * 1e6) / 1e6;
+      latIn.value = lat; lngIn.value = lng;
+      if (!marker) {
+        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+        marker.on('dragend', () => { const p = marker.getLatLng(); place(p.lat, p.lng); });
+      } else marker.setLatLng([lat, lng]);
+      if (zoom) map.setView([lat, lng], zoom);
+    };
+    if (has()) place(+latIn.value, +lngIn.value);
+    map.on('click', (e) => place(e.latlng.lat, e.latlng.lng));
+    const fromInputs = () => { if (has() && Number.isFinite(+latIn.value) && Number.isFinite(+lngIn.value)) place(+latIn.value, +lngIn.value, map.getZoom() < 15 ? 17 : null); };
+    latIn.addEventListener('change', fromInputs);
+    lngIn.addEventListener('change', fromInputs);
+    $('[data-loc-find]', form).onclick = async (e) => {
+      const url = $('[data-loc-paste]', form).value.trim();
+      if (!url) return toast('Paste a Google Maps link or coordinates first', 'err');
+      setBusy(e.target, true, 'Finding…');
+      try { const c = await api('/resolve-map-link', { method: 'POST', body: { url } }); place(c.lat, c.lng, 17); toast('Pin placed. Check it, then save.', 'ok'); } catch (x) { toast(x.message, 'err'); } finally { setBusy(e.target, false); }
+    };
+    $('[data-loc-clear]', form).onclick = () => { latIn.value = ''; lngIn.value = ''; if (marker) { marker.remove(); marker = null; } };
+    setTimeout(() => map.invalidateSize(), 200);
+  }
 
   views.settings = {
     title: 'Settings',

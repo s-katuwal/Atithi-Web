@@ -182,6 +182,13 @@
     </svg>`;
   }
 
+  // ---------- Maps ----------
+  const hasPin = (b) => b && b.lat != null && b.lng != null;
+  /** Google Maps embed: exact pin when the branch has coordinates, otherwise a search for its address. */
+  const mapSrc = (b) => `https://maps.google.com/maps?q=${hasPin(b) ? `${b.lat},${b.lng}` : encodeURIComponent(b.map_query || b.address || b.name)}&z=${hasPin(b) ? 17 : 14}&output=embed`;
+  const directionsHref = (b) => `https://www.google.com/maps/dir/?api=1&destination=${hasPin(b) ? `${b.lat},${b.lng}` : encodeURIComponent(b.map_query || b.address)}`;
+  const mapsHref = (b) => `https://www.google.com/maps/search/?api=1&query=${hasPin(b) ? `${b.lat},${b.lng}` : encodeURIComponent(b.map_query || b.address)}`;
+
   /** Offer cards for the home and branch pages. */
   const offerCards = (offers) => offers.map((o) => `<article class="card offer-card">
       ${o.image_url ? `<div class="offer-img"><img src="${esc(o.image_url)}" alt="${esc(o.title)}" loading="lazy"></div>` : ''}
@@ -220,6 +227,7 @@
           <a href="/book?type=table" class="${active === 'table' ? 'active' : ''}">Reserve a Table</a>
           <a href="/gallery" class="${active === 'gallery' ? 'active' : ''}" data-show="show_gallery">Gallery</a>
           <a href="/careers" class="${active === 'careers' ? 'active' : ''}" data-show="show_careers">Careers</a>
+          <a href="/locations" class="${active === 'locations' ? 'active' : ''}" data-show="show_locations">Locations</a>
           <a href="/#contact">Contact</a>
           <a href="/book" class="btn btn-accent">${icon('calendar', 18)} <span data-c="book_btn">Book Now</span></a>
         </nav>
@@ -248,6 +256,7 @@
         ${b.address ? `<li>${esc(b.address)}</li>` : ''}
         ${b.phone ? `<li><a href="${telHref(b.phone)}">${esc(b.phone)}</a></li>` : ''}
         ${b.email ? `<li><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></li>` : ''}
+        <li><a href="${directionsHref(b)}" target="_blank" rel="noopener">Get directions ↗</a></li>
         <li><a href="/branches/${b.id}">View branch →</a></li></ul></div>`;
     const draw = (bs, site = {}) => {
       const social = SOCIAL.filter(([k]) => site[k]).map(([k, ic, label]) =>
@@ -265,7 +274,7 @@
         </div>
         <div class="container footer-bottom">
           <span>© ${year} <span data-c="footer_copyright">Atithi Restro & Lodge · Atithi Food Garden</span>. All rights reserved.</span>
-          <span><a href="/track">Manage booking</a> · <a href="/gallery" data-show="show_gallery">Gallery</a> · <a href="/careers" data-show="show_careers">Careers</a> · <a href="/admin">Staff login</a></span>
+          <span><a href="/track">Manage booking</a> · <a href="/gallery" data-show="show_gallery">Gallery</a> · <a href="/careers" data-show="show_careers">Careers</a> · <a href="/locations" data-show="show_locations">Locations</a> · <a href="/admin">Staff login</a></span>
         </div>
         <div class="footer-stripe"></div>
       </footer>`;
@@ -311,7 +320,7 @@
 
   window.Atithi = {
     LOGOS, BRANCHES, logoFor, icon, facilityIcon, esc, rs, $, $$, list, todayStr, addDays, fmtDate, fmtTime,
-    api, getBranches, getSite, applyContent, lines, lightbox, offerCards, toast, setBusy, telHref, waHref, roomArt, renderHeader, renderFooter,
+    api, getBranches, getSite, applyContent, lines, lightbox, offerCards, hasPin, mapSrc, directionsHref, mapsHref, toast, setBusy, telHref, waHref, roomArt, renderHeader, renderFooter,
   };
 
   document.addEventListener('DOMContentLoaded', () => {

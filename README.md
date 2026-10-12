@@ -57,6 +57,7 @@ There is no online payment step. Guests pay at the branch.
 - **Careers**: post job openings (branch, type, salary, deadline, description, requirements). Candidates apply on the Careers page with an optional CV (PDF, Word, JPG or PNG, up to 3 MB). CVs are stored privately, and only logged-in staff can download them from Admin → Careers. The applicant gets a confirmation email, and staff get an alert.
 - Edit the menu per branch: prices, veg/non-veg, "popular" items shown on the home page.
 - Edit branch details: address, phone, WhatsApp, email, map, opening hours, seating areas, facilities.
+- **Exact map location** for each branch (Admin → Branches): click the map, drag the pin, paste a Google Maps link (short phone share links work), or type coordinates. The pin is used on the **Locations** page (`/locations`, which has a map and "Get directions" for every branch), on each branch page, and in the footer's "Get directions" links.
 
 ## Booking emails
 - When a guest books a room or table, they get a **"booking received"** email. Staff get a new-booking alert at the address(es) in Settings and at the branch email.
