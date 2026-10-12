@@ -240,6 +240,18 @@
       toggle.innerHTML = icon(open ? 'close' : 'menu', 28);
     });
     links.addEventListener('click', (e) => { if (e.target.closest('a')) { links.classList.remove('open'); toggle.innerHTML = icon('menu', 28); } });
+    // "Our Branches" menu: opens on hover or click, and waits a moment before closing so it is easy to reach.
+    const drop = $('.nav-drop', el), dropBtn = $('.nav-drop > button', el);
+    let closeTimer;
+    const openDrop = () => { clearTimeout(closeTimer); drop.classList.add('open'); dropBtn.setAttribute('aria-expanded', 'true'); };
+    const closeDrop = () => { drop.classList.remove('open'); dropBtn.setAttribute('aria-expanded', 'false'); };
+    drop.addEventListener('mouseenter', openDrop);
+    drop.addEventListener('mouseleave', () => { closeTimer = setTimeout(closeDrop, 400); });
+    dropBtn.addEventListener('click', () => (drop.classList.contains('open') ? closeDrop() : openDrop()));
+    document.addEventListener('click', (e) => { if (!drop.contains(e.target)) closeDrop(); });
+    drop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrop(); dropBtn.focus(); } });
+    drop.addEventListener('focusout', (e) => { if (!drop.contains(e.relatedTarget)) closeTimer = setTimeout(closeDrop, 150); });
+    dropBtn.addEventListener('focus', openDrop);
     getBranches().then((bs) => { $('#nav-branches').innerHTML = bs.map(item).join(''); });
     getSite().then((s) => {
       applyTheme(s);

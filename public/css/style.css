@@ -120,7 +120,9 @@ p { margin: 0 0 1em; }
   position: absolute; top: calc(100% + 6px); left: 0; min-width: 270px; background: #fff; border: 1px solid var(--line);
   border-radius: 12px; box-shadow: var(--shadow); padding: 8px; display: none;
 }
-.nav-drop:hover .nav-drop-menu, .nav-drop:focus-within .nav-drop-menu, .nav-drop.open .nav-drop-menu { display: block; }
+.nav-drop.open .nav-drop-menu { display: block; }
+/* Invisible bridge over the gap between the button and the menu, so moving the mouse down doesn't close it */
+.nav-drop-menu::before { content: ''; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
 .nav-drop-menu a { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 8px; color: var(--ink); }
 .nav-drop-menu a:hover { background: var(--blue-50); }
 .nav-drop-menu img { width: 36px; height: 36px; border-radius: 50%; }
