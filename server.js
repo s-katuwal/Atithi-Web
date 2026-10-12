@@ -31,7 +31,13 @@ app.get('/branches/:id', (req, res) => res.sendFile(path.join(PUBLIC, 'branch.ht
 // Photos uploaded while Supabase Storage is not set up (local testing only).
 if (!storage.useSupabase) app.use('/uploads', express.static(storage.LOCAL_DIR, { maxAge: '30d', immutable: true, index: false }));
 // On Vercel, files in public/ are served by its CDN and express.static is ignored; this is for local runs.
-app.use(express.static(PUBLIC, { extensions: ['html'], maxAge: '1h' }));
+app.use(express.static(PUBLIC, {
+  extensions: ['html'],
+  maxAge: '1h',
+  // Pages, scripts and styles change with every update: make browsers re-check them (cheap, thanks to ETags)
+  // so visitors and staff never run an old copy. Images keep the 1-hour cache.
+  setHeaders: (res, file) => { if (/\.(html|js|css)$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); },
+}));
 app.use((req, res) => res.status(404).sendFile(path.join(PUBLIC, '404.html'), (err) => { if (err) res.end('Page not found'); }));
 
 // eslint-disable-next-line no-unused-vars
