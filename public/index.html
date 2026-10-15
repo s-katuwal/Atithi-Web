@@ -11,8 +11,105 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Mukta:wght@500;600;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script>
+    /* Decide before the page draws whether the namaste welcome plays (once per visit; add ?intro to replay). */
+    (function () {
+      var d = document.documentElement, force = /[?&]intro\b/.test(location.search), skip = false;
+      d.classList.add('js');
+      try {
+        var cfg = JSON.parse(localStorage.getItem('atithi_intro_cfg') || '{}');
+        skip = sessionStorage.getItem('atithi_intro') === '1' || cfg.show === '0';
+      } catch (e) { skip = false; }
+      if (skip && !force) d.classList.add('no-intro');
+      else {
+        d.classList.add('intro-open');
+        // Safety net: never leave the page locked if the welcome script fails to load.
+        setTimeout(function () { d.classList.remove('intro-open'); }, 15000);
+      }
+    })();
+  </script>
 </head>
 <body data-page="home">
+  <!-- Namaste welcome (home page, once per visit). Text and switch: Admin → Website content → Opening animation -->
+  <div class="intro" id="intro" role="dialog" aria-label="Welcome">
+    <button type="button" class="intro-skip" data-intro-close>Skip ›</button>
+    <div class="intro-petals" aria-hidden="true"></div>
+    <div class="intro-inner">
+      <div class="intro-art" id="introArt">
+        <svg viewBox="0 0 300 300" role="img" aria-label="A waitress greeting you with namaste">
+          <defs>
+            <linearGradient id="wsBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE7BF"/><stop offset="1" stop-color="#DCEBF8"/></linearGradient>
+            <clipPath id="wsClip"><circle cx="150" cy="150" r="142"/></clipPath>
+          </defs>
+          <circle cx="150" cy="150" r="146" fill="url(#wsBg)"/>
+          <g clip-path="url(#wsClip)">
+            <path d="M62 128 L150 64 L238 128" fill="none" stroke="#F5A11C" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/>
+            <g class="ws-figure">
+              <!-- hair (back) and bun with a marigold -->
+              <circle cx="150" cy="68" r="16" fill="#2B1B14"/>
+              <g transform="translate(168 64)"><circle cx="0" cy="-5" r="4.5" fill="#FF8A1F"/><circle cx="5" cy="-1" r="4.5" fill="#FF8A1F"/><circle cx="3" cy="5" r="4.5" fill="#FF8A1F"/><circle cx="-3" cy="5" r="4.5" fill="#FF8A1F"/><circle cx="-5" cy="-1" r="4.5" fill="#FF8A1F"/><circle r="3" fill="#FFD23F"/></g>
+              <ellipse cx="150" cy="116" rx="41" ry="44" fill="#2B1B14"/>
+              <!-- neck, kurta, collar, shawl, apron -->
+              <path d="M139 140 H161 L163 168 H137 Z" fill="#C98B62"/>
+              <path d="M100 184 Q103 170 118 166 L136 161 Q150 172 164 161 L182 166 Q197 170 200 184 L216 300 H84 Z" fill="#1774BC"/>
+              <path d="M136 161 Q150 186 164 161" fill="none" stroke="#F5A11C" stroke-width="5" stroke-linecap="round"/>
+              <path d="M104 172 Q118 162 132 165 L206 270 L198 300 H186 Z" fill="#F5A11C"/>
+              <path d="M110 170 L196 296" stroke="#C9790A" stroke-width="1.5" stroke-dasharray="3 4"/>
+              <path d="M118 228 Q150 234 182 228 L190 300 H110 Z" fill="#fff"/>
+              <path d="M114 228 Q150 236 186 228" fill="none" stroke="#F5A11C" stroke-width="4" stroke-linecap="round"/>
+              <rect x="138" y="252" width="24" height="16" rx="3" fill="none" stroke="#F5A11C" stroke-width="2"/>
+              <rect x="166" y="186" width="20" height="8" rx="2" fill="#fff"/>
+              <!-- head -->
+              <circle cx="111" cy="116" r="7" fill="#E8AE84"/><circle cx="189" cy="116" r="7" fill="#E8AE84"/>
+              <circle cx="111" cy="125" r="2.8" fill="#F5A11C"/><circle cx="189" cy="125" r="2.8" fill="#F5A11C"/>
+              <ellipse cx="150" cy="114" rx="36" ry="38" fill="#E8AE84"/>
+              <path d="M114 112 Q112 76 150 74 Q188 76 186 112 Q182 92 162 86 Q150 97 138 86 Q118 92 114 112 Z" fill="#2B1B14"/>
+              <circle cx="150" cy="97" r="3" fill="#D62828"/>
+              <path d="M130 102 Q136 98 143 101 M157 101 Q164 98 170 102" fill="none" stroke="#2B1B14" stroke-width="2.2" stroke-linecap="round"/>
+              <g class="ws-eyes-open"><ellipse cx="137" cy="113" rx="3.6" ry="4.4" fill="#2B1B14"/><ellipse cx="163" cy="113" rx="3.6" ry="4.4" fill="#2B1B14"/><circle cx="138.2" cy="111.5" r="1.1" fill="#fff"/><circle cx="164.2" cy="111.5" r="1.1" fill="#fff"/></g>
+              <g class="ws-eyes-closed"><path d="M132 113 Q137 117 142 113 M158 113 Q163 117 168 113" fill="none" stroke="#2B1B14" stroke-width="2.2" stroke-linecap="round"/></g>
+              <path d="M150 117 Q147 125 151 126" fill="none" stroke="#C98B62" stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="129" cy="125" r="6" fill="#FF7B7B" opacity=".3"/><circle cx="171" cy="125" r="6" fill="#FF7B7B" opacity=".3"/>
+              <path d="M141 132 Q150 141 159 132 Z" fill="#B4483A"/>
+              <!-- arms: rise from the sides and join in namaste (right arm is the left arm mirrored) -->
+              <g transform="translate(112 174)">
+          <g class="ws-upper">
+            <rect x="-11" y="-8" width="22" height="66" rx="11" fill="#1774BC"/>
+            <rect x="-11" y="48" width="22" height="8" fill="#F5A11C"/>
+            <g transform="translate(0 56)"><g class="ws-fore">
+              <rect x="-8" y="-3" width="16" height="47" rx="8" fill="#E8AE84"/>
+              <g transform="translate(0 42)"><g class="ws-hand">
+                <path d="M-6.5 0 h13 v15 q0 11 -6.5 12 q-6.5 -1 -6.5 -12 z" fill="#E8AE84" stroke="#C98B62" stroke-width="1"/>
+                <path d="M-2 6 v12 M2 6 v12" stroke="#C98B62" stroke-width="1" stroke-linecap="round"/>
+              </g></g>
+            </g></g>
+          </g>
+              </g>
+              <g transform="translate(300 0) scale(-1 1)"><g transform="translate(112 174)">
+          <g class="ws-upper">
+            <rect x="-11" y="-8" width="22" height="66" rx="11" fill="#1774BC"/>
+            <rect x="-11" y="48" width="22" height="8" fill="#F5A11C"/>
+            <g transform="translate(0 56)"><g class="ws-fore">
+              <rect x="-8" y="-3" width="16" height="47" rx="8" fill="#E8AE84"/>
+              <g transform="translate(0 42)"><g class="ws-hand">
+                <path d="M-6.5 0 h13 v15 q0 11 -6.5 12 q-6.5 -1 -6.5 -12 z" fill="#E8AE84" stroke="#C98B62" stroke-width="1"/>
+                <path d="M-2 6 v12 M2 6 v12" stroke="#C98B62" stroke-width="1" stroke-linecap="round"/>
+              </g></g>
+            </g></g>
+          </g>
+              </g></g>
+            </g>
+          </g>
+          <circle cx="150" cy="150" r="143" fill="none" stroke="#F5A11C" stroke-width="5"/>
+          <circle cx="150" cy="150" r="147.5" fill="none" stroke="#1774BC" stroke-width="4"/>
+        </svg>
+      </div>
+      <div class="intro-greeting" lang="ne" id="introGreeting">नमस्ते</div>
+      <p class="intro-text" lang="ne" id="introText"></p>
+      <p class="intro-sub" id="introSub">Welcome to the official website of Atithi Restro</p>
+      <button type="button" class="btn btn-accent intro-enter" id="introEnter" data-intro-close>Enter website →</button>
+    </div>
+  </div>
   <div id="site-header"></div>
 
   <main>
@@ -180,5 +277,6 @@
   <div id="site-footer"></div>
   <script src="/js/common.js"></script>
   <script src="/js/home.js"></script>
+  <script src="/js/intro.js"></script>
 </body>
 </html>
